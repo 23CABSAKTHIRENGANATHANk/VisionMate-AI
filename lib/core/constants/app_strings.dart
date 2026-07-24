@@ -149,4 +149,66 @@ class AppStrings {
       'Built with Flutter and Material 3 for a premium, accessible experience.';
   static const String aboutDeveloper = 'Developed by the VisionMate Team';
   static const String aboutContact = 'support@visionmate.ai';
+
+  // ── Module 3: Camera Permission Screen ────────────────────────────────────
+
+  /// Title on the camera-permission request screen.
+  static const String cameraPermissionTitle = 'Camera Access Required';
+
+  /// Body explanation on the permission screen.
+  static const String cameraPermissionBody =
+      'VisionMate AI needs access to your camera to provide\n'
+      'real-time object detection and navigation guidance.';
+
+  /// Primary CTA button — requests the permission.
+  static const String cameraPermissionGrantButton = 'Grant Camera Permission';
+
+  /// Secondary button when permission is permanently denied.
+  static const String cameraPermissionSettingsButton = 'Open App Settings';
+
+  /// Label when permission is permanently denied.
+  static const String cameraPermissionDeniedTitle = 'Permission Denied';
+
+  /// Explanation when permanently denied.
+  static const String cameraPermissionDeniedBody =
+      'Camera permission was permanently denied.\n'
+      'Please enable it in your device settings to continue.';
+
+  // ── Module 3: Camera Screen Status Labels ─────────────────────────────────
+
+  /// Status chip shown when the preview is active.
+  static const String cameraStatusLive = 'LIVE';
+
+  /// Status chip shown when the preview is paused.
+  static const String cameraStatusPaused = 'PAUSED';
+
+  /// Status shown while the camera is starting.
+  static const String cameraStatusInitializing = 'INITIALIZING';
+
+  /// Status shown when camera encounters an error.
+  static const String cameraStatusError = 'ERROR';
+
+  // ── Module 3: Camera Control Tooltips ─────────────────────────────────────
+
+  /// Tooltip / semantic label for the flash-toggle button.
+  static const String cameraFlashOn = 'Turn Flash On';
+
+  /// Tooltip / semantic label for the flash-off button.
+  static const String cameraFlashOff = 'Turn Flash Off';
+
+  /// Tooltip / semantic label for the switch-camera button.
+  static const String cameraSwitchCamera = 'Switch Camera';
+
+  /// Tooltip / semantic label for the capture button.
+  static const String cameraCaptureButton = 'Capture (coming soon)';
+
+  /// Snackbar message when capture is tapped (placeholder).
+  static const String cameraCaptureSnackbar =
+      'Image capture will be enabled in Module 4.';
+
+  /// Generic camera error heading.
+  static const String cameraErrorTitle = 'Camera Unavailable';
+
+  /// Generic camera error action button.
+  static const String cameraErrorRetry = 'Retry';
 }

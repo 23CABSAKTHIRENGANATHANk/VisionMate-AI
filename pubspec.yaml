@@ -40,6 +40,12 @@ dependencies:
   # Flutter Animate — declarative, composable animation library.
   flutter_animate: ^4.5.0
 
+  # Camera — official Flutter camera package for live preview.
+  camera: ^0.12.0+2
+
+  # Permission Handler — runtime permission requests (camera).
+  permission_handler: ^12.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
