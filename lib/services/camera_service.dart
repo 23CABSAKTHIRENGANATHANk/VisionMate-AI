@@ -211,6 +211,7 @@ class CameraService {
     void Function(CameraImage frame) onAvailable,
   ) async {
     if (_isDisposed || !isReady || _controller == null) return;
+    if (_controller!.value.isStreamingImages) return;
 
     try {
       await _controller!.startImageStream(onAvailable);
@@ -222,6 +223,7 @@ class CameraService {
   /// Stops the active preview image stream.
   Future<void> stopImageStream() async {
     if (_isDisposed || _controller == null) return;
+    if (!_controller!.value.isStreamingImages) return;
 
     try {
       await _controller!.stopImageStream();

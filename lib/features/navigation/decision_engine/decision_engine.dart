@@ -101,7 +101,7 @@ class DecisionEngine {
       byRisk.putIfAbsent(obstacle.risk, () => []).add(obstacle);
     }
 
-    final highestRisk = byRisk.keys.reduce((a, b) => a.index < b.index ? a : b);
+    final highestRisk = byRisk.keys.reduce((a, b) => a.index > b.index ? a : b);
     final candidates = byRisk[highestRisk]!;
 
     candidates.sort((a, b) {

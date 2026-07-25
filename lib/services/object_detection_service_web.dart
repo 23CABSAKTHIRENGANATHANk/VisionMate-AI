@@ -16,6 +16,7 @@ class ObjectDetectionService {
   bool _isProcessing = false;
 
   bool get isLoaded => _isLoaded;
+  bool get isProcessing => _isProcessing;
   String? lastError;
 
   Future<void> initialize() async {

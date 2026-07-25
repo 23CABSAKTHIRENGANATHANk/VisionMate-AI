@@ -64,6 +64,7 @@ class _CameraScreenState extends State<CameraScreen>
   _CameraPhase _phase = _CameraPhase.checkingPermission;
   bool _isSwitching = false;
   bool _isDetectionInitializing = true;
+  bool _isStartingDetectionStream = false;
   String? _detectionError;
   List<DetectionResult> _detections = const <DetectionResult>[];
   String _lastVoiceGuidance = '';
@@ -85,7 +86,8 @@ class _CameraScreenState extends State<CameraScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _cameraService.dispose();
+    unawaited(VoiceService.instance.stop());
+    unawaited(_cameraService.dispose());
     _detectionService.dispose();
     super.dispose();
   }
@@ -93,15 +95,35 @@ class _CameraScreenState extends State<CameraScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final controller = _cameraService.controller;
-    if (controller == null || !controller.value.isInitialized) return;
 
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
+      debugPrint(
+        '[CameraScreen] App paused or inactive, stopping stream and speech.',
+      );
       _cameraService.pause().then((_) {
+        unawaited(VoiceService.instance.stop());
         if (mounted) setState(() {});
       });
-    } else if (state == AppLifecycleState.resumed) {
-      _cameraService.resume().then((_) {
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[CameraScreen] App resumed, restoring camera state.');
+      if (_phase == _CameraPhase.permissionDenied ||
+          _phase == _CameraPhase.permissionPermanentlyDenied) {
+        unawaited(_checkPermissionAndInitialize());
+        return;
+      }
+
+      if (controller == null || !controller.value.isInitialized) {
+        return;
+      }
+
+      _cameraService.resume().then((_) async {
+        if (_detectionService.isLoaded && _cameraService.isReady) {
+          await _startDetectionStream();
+        }
         if (mounted) setState(() {});
       });
     }
@@ -211,10 +233,16 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Future<void> _startDetectionStream() async {
+    if (_isStartingDetectionStream) return;
     if (!_detectionService.isLoaded || !_cameraService.isReady) return;
 
-    await _cameraService.stopImageStream();
-    await _cameraService.startImageStream(_onCameraImageAvailable);
+    _isStartingDetectionStream = true;
+    try {
+      await _cameraService.stopImageStream();
+      await _cameraService.startImageStream(_onCameraImageAvailable);
+    } finally {
+      _isStartingDetectionStream = false;
+    }
   }
 
   void _onCameraImageAvailable(CameraImage image) {
@@ -235,7 +263,7 @@ class _CameraScreenState extends State<CameraScreen>
       planes: image.planes
           .map(
             (plane) => DetectionPlane(
-              bytes: Uint8List.fromList(plane.bytes),
+              bytes: plane.bytes,
               bytesPerRow: plane.bytesPerRow,
               bytesPerPixel: plane.bytesPerPixel ?? 1,
             ),
