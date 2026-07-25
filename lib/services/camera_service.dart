@@ -113,14 +113,12 @@ class CameraService {
   bool get hasMultipleCameras => _cameras.length > 1;
 
   /// `true` when the torch / flash is currently active.
-  bool get isTorchOn =>
-      _controller?.value.flashMode == FlashMode.torch;
+  bool get isTorchOn => _controller?.value.flashMode == FlashMode.torch;
 
   /// The lens direction of the currently active camera.
-  CameraLensDirection get currentLensDirection =>
-      _cameras.isNotEmpty
-          ? _cameras[_currentIndex].lensDirection
-          : CameraLensDirection.back;
+  CameraLensDirection get currentLensDirection => _cameras.isNotEmpty
+      ? _cameras[_currentIndex].lensDirection
+      : CameraLensDirection.back;
 
   // ── Initialisation ────────────────────────────────────────────────────────
 
@@ -168,7 +166,7 @@ class CameraService {
       ResolutionPreset.high,
       // Audio is not needed for visual navigation assistance.
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
+      imageFormatGroup: ImageFormatGroup.yuv420,
     );
 
     try {
@@ -199,9 +197,36 @@ class CameraService {
   Future<bool> switchCamera() async {
     if (_isDisposed || !hasMultipleCameras) return false;
 
+    await stopImageStream();
     state = CameraServiceState.initializing;
     _currentIndex = (_currentIndex + 1) % _cameras.length;
     return await _startController(_cameras[_currentIndex]);
+  }
+
+  /// Starts streaming preview frames to the supplied callback.
+  ///
+  /// Frame delivery is only available when the preview is ready.
+  Future<void> startImageStream(
+    void Function(CameraImage frame) onAvailable,
+  ) async {
+    if (_isDisposed || !isReady || _controller == null) return;
+
+    try {
+      await _controller!.startImageStream(onAvailable);
+    } on CameraException catch (e) {
+      debugPrint('[CameraService] startImageStream: ${e.description}');
+    }
+  }
+
+  /// Stops the active preview image stream.
+  Future<void> stopImageStream() async {
+    if (_isDisposed || _controller == null) return;
+
+    try {
+      await _controller!.stopImageStream();
+    } on CameraException catch (e) {
+      debugPrint('[CameraService] stopImageStream: ${e.description}');
+    }
   }
 
   /// Toggles the flash between torch-on and off.
@@ -229,6 +254,8 @@ class CameraService {
     if (_isDisposed) return;
     if (_controller == null || !(_controller!.value.isInitialized)) return;
     if (state == CameraServiceState.paused) return;
+
+    await stopImageStream();
 
     try {
       await _controller!.pausePreview();
@@ -261,6 +288,7 @@ class CameraService {
   /// After this call the service is inert and should not be reused.
   Future<void> dispose() async {
     _isDisposed = true;
+    await stopImageStream();
     await _releaseController();
     state = CameraServiceState.uninitialized;
   }

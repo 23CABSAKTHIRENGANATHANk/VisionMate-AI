@@ -14,6 +14,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/constants/app_strings.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_tile.dart';
+import '../voice/voice_service.dart';
 
 /// The settings configuration screen for VisionMate AI.
 ///
@@ -28,6 +29,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final VoiceService _voiceService = VoiceService.instance;
+
   // ── Appearance ────────────────────────────────────────────────────────────
   bool _darkMode = false;
   bool _highContrast = false;
@@ -40,7 +43,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Voice ─────────────────────────────────────────────────────────────────
   bool _voiceGuidance = true;
-  bool _adjustedSpeechRate = false;
+  double _speechRate = 0.5;
+  double _volume = 1.0;
+  double _pitch = 1.0;
+  String _selectedLanguage = 'en-US';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVoiceSettings();
+  }
+
+  Future<void> _initializeVoiceSettings() async {
+    await _voiceService.initialize();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _voiceGuidance = _voiceService.isEnabled;
+      _speechRate = _voiceService.speechRate;
+      _volume = _voiceService.volume;
+      _pitch = _voiceService.pitch;
+      _selectedLanguage = _voiceService.selectedLanguage;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +91,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+          ),
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -171,18 +201,125 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: AppStrings.settingVoiceGuidanceSub,
                   trailing: Switch(
                     value: _voiceGuidance,
-                    onChanged: (v) => setState(() => _voiceGuidance = v),
+                    onChanged: (value) async {
+                      setState(() => _voiceGuidance = value);
+                      await _voiceService.setEnabled(value);
+                    },
                   ),
                 ),
                 const Divider(indent: 56, height: 1),
-                SettingsTile(
-                  icon: Icons.speed_rounded,
-                  iconColor: const Color(0xFF4527A0),
-                  title: AppStrings.settingVoiceSpeed,
-                  subtitle: AppStrings.settingVoiceSpeedSub,
-                  trailing: Switch(
-                    value: _adjustedSpeechRate,
-                    onChanged: (v) => setState(() => _adjustedSpeechRate = v),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppStrings.voiceRateLabel,
+                        style: theme.textTheme.labelLarge,
+                      ),
+                      Slider(
+                        value: _speechRate,
+                        min: 0.0,
+                        max: 1.0,
+                        divisions: 20,
+                        label: _speechRate.toStringAsFixed(2),
+                        onChanged: (value) async {
+                          setState(() => _speechRate = value);
+                          await _voiceService.setSpeechRate(value);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.voiceVolumeLabel,
+                        style: theme.textTheme.labelLarge,
+                      ),
+                      Slider(
+                        value: _volume,
+                        min: 0.0,
+                        max: 1.0,
+                        divisions: 20,
+                        label: _volume.toStringAsFixed(2),
+                        onChanged: (value) async {
+                          setState(() => _volume = value);
+                          await _voiceService.setVolume(value);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.voicePitchLabel,
+                        style: theme.textTheme.labelLarge,
+                      ),
+                      Slider(
+                        value: _pitch,
+                        min: 0.5,
+                        max: 2.0,
+                        divisions: 15,
+                        label: _pitch.toStringAsFixed(2),
+                        onChanged: (value) async {
+                          setState(() => _pitch = value);
+                          await _voiceService.setPitch(value);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        AppStrings.voiceLanguageLabel,
+                        style: theme.textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedLanguage,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'en-US',
+                            child: Text('English (US)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'en-GB',
+                            child: Text('English (UK)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'hi-IN',
+                            child: Text('Hindi'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'es-ES',
+                            child: Text('Spanish'),
+                          ),
+                        ],
+                        onChanged: (value) async {
+                          if (value == null) {
+                            return;
+                          }
+                          setState(() => _selectedLanguage = value);
+                          await _voiceService.selectLanguage(value);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+
+                          await _voiceService.speak(
+                            AppStrings.voiceTestMessage,
+                          );
+                          if (!mounted) {
+                            return;
+                          }
+
+                          if (_voiceService.lastError != null) {
+                            messenger.showSnackBar(
+                              SnackBar(content: Text(_voiceService.lastError!)),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.volume_up_rounded),
+                        label: Text(AppStrings.voiceTestButton),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -279,7 +416,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showComingSoon(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('This setting will be available in a future module.'),
+        content: const Text(
+          'This setting will be available in a future module.',
+        ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         duration: const Duration(seconds: 2),
@@ -310,10 +449,7 @@ class _SettingsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(AppConstants.tileRadius),
-        border: Border.all(
-          color: colorScheme.outline.withAlpha(38),
-          width: 1,
-        ),
+        border: Border.all(color: colorScheme.outline.withAlpha(38), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha(12),

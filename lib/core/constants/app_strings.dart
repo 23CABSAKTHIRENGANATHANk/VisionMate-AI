@@ -56,27 +56,40 @@ class AppStrings {
   // Appearance section
   static const String appearanceSection = 'Appearance';
   static const String settingDarkMode = 'Dark Mode';
-  static const String settingDarkModeSub = 'Switch between light and dark theme';
+  static const String settingDarkModeSub =
+      'Switch between light and dark theme';
   static const String settingHighContrast = 'High Contrast';
-  static const String settingHighContrastSub = 'Increase colour contrast for readability';
+  static const String settingHighContrastSub =
+      'Increase colour contrast for readability';
   static const String settingLargeText = 'Large Text';
-  static const String settingLargeTextSub = 'Increase default font size throughout the app';
+  static const String settingLargeTextSub =
+      'Increase default font size throughout the app';
 
   // Accessibility section
   static const String accessibilitySection = 'Accessibility';
   static const String settingHapticFeedback = 'Haptic Feedback';
   static const String settingHapticFeedbackSub = 'Vibrate on navigation events';
   static const String settingScreenReader = 'Screen Reader Support';
-  static const String settingScreenReaderSub = 'Optimise UI for TalkBack / VoiceOver';
+  static const String settingScreenReaderSub =
+      'Optimise UI for TalkBack / VoiceOver';
   static const String settingReduceMotion = 'Reduce Motion';
-  static const String settingReduceMotionSub = 'Minimise animations for motion sensitivity';
+  static const String settingReduceMotionSub =
+      'Minimise animations for motion sensitivity';
 
   // Voice section
   static const String voiceSection = 'Voice';
   static const String settingVoiceGuidance = 'Voice Guidance';
-  static const String settingVoiceGuidanceSub = 'Spoken directions during navigation';
+  static const String settingVoiceGuidanceSub =
+      'Spoken directions during navigation';
   static const String settingVoiceSpeed = 'Speech Rate';
   static const String settingVoiceSpeedSub = 'Adjust text-to-speech speed';
+  static const String voiceRateLabel = 'Speech Rate';
+  static const String voiceVolumeLabel = 'Volume';
+  static const String voicePitchLabel = 'Pitch';
+  static const String voiceLanguageLabel = 'Language';
+  static const String voiceTestButton = 'Test Voice';
+  static const String voiceTestMessage =
+      'VisionMate AI voice guidance is ready.';
 
   // Language section
   static const String languageSection = 'Language';
@@ -187,6 +200,10 @@ class AppStrings {
 
   /// Status shown when camera encounters an error.
   static const String cameraStatusError = 'ERROR';
+
+  /// Message shown while the detection model is loading.
+  static const String cameraDetectionLoading =
+      'Loading object detection model…';
 
   // ── Module 3: Camera Control Tooltips ─────────────────────────────────────
 

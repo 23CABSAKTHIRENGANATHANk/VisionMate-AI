@@ -13,15 +13,19 @@
 // ---------------------------------------------------------------------------
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../services/camera_service.dart';
+import '../../services/object_detection_service.dart';
+import '../detection/detection_result.dart';
 import 'camera_permission_screen.dart';
 import 'widgets/camera_controls_bar.dart';
 import 'widgets/camera_top_bar.dart';
 import 'widgets/camera_viewfinder_overlay.dart';
+import 'widgets/detection_overlay.dart';
 
 /// Phase states for the camera screen workflow.
 enum _CameraPhase {
@@ -44,13 +48,20 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
   final CameraService _cameraService = CameraService();
+  final ObjectDetectionService _detectionService =
+      ObjectDetectionService.instance;
+
   _CameraPhase _phase = _CameraPhase.checkingPermission;
   bool _isSwitching = false;
+  bool _isDetectionInitializing = true;
+  String? _detectionError;
+  List<DetectionResult> _detections = const <DetectionResult>[];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initializeObjectDetection();
     _checkPermissionAndInitialize();
   }
 
@@ -58,6 +69,7 @@ class _CameraScreenState extends State<CameraScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cameraService.dispose();
+    _detectionService.dispose();
     super.dispose();
   }
 
@@ -66,7 +78,8 @@ class _CameraScreenState extends State<CameraScreen>
     final controller = _cameraService.controller;
     if (controller == null || !controller.value.isInitialized) return;
 
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       _cameraService.pause().then((_) {
         if (mounted) setState(() {});
       });
@@ -113,6 +126,7 @@ class _CameraScreenState extends State<CameraScreen>
     if (!mounted) return;
 
     if (success) {
+      await _startDetectionStream();
       setState(() => _phase = _CameraPhase.ready);
     } else {
       setState(() => _phase = _CameraPhase.error);
@@ -125,7 +139,11 @@ class _CameraScreenState extends State<CameraScreen>
     if (_isSwitching) return;
     setState(() => _isSwitching = true);
 
-    await _cameraService.switchCamera();
+    final success = await _cameraService.switchCamera();
+    if (success) {
+      await _startDetectionStream();
+    }
+
     if (mounted) {
       setState(() => _isSwitching = false);
     }
@@ -146,6 +164,58 @@ class _CameraScreenState extends State<CameraScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
+  }
+
+  Future<void> _initializeObjectDetection() async {
+    await _detectionService.initialize();
+    if (!mounted) return;
+
+    setState(() {
+      _isDetectionInitializing = false;
+      _detectionError = _detectionService.isLoaded
+          ? null
+          : _detectionService.lastError ?? 'AI model failed to initialise.';
+    });
+
+    if (_detectionService.isLoaded && _cameraService.isReady) {
+      await _startDetectionStream();
+    }
+  }
+
+  Future<void> _startDetectionStream() async {
+    if (!_detectionService.isLoaded || !_cameraService.isReady) return;
+
+    await _cameraService.stopImageStream();
+    await _cameraService.startImageStream(_onCameraImageAvailable);
+  }
+
+  void _onCameraImageAvailable(CameraImage image) {
+    if (!_detectionService.isLoaded) return;
+    if (_detectionService.isLoaded) {
+      final frame = DetectionFrame(
+        width: image.width,
+        height: image.height,
+        formatGroup: image.format.group.index,
+        planes: image.planes
+            .map(
+              (plane) => DetectionPlane(
+                bytes: Uint8List.fromList(plane.bytes),
+                bytesPerRow: plane.bytesPerRow,
+                bytesPerPixel: plane.bytesPerPixel ?? 1,
+              ),
+            )
+            .toList(),
+      );
+      _processCameraFrame(frame);
+    }
+  }
+
+  Future<void> _processCameraFrame(DetectionFrame frame) async {
+    final detections = await _detectionService.detect(frame);
+    if (!mounted) return;
+    if (!listEquals(detections, _detections)) {
+      setState(() => _detections = detections);
+    }
   }
 
   // ── Build Methods ─────────────────────────────────────────────────────────
@@ -209,7 +279,11 @@ class _CameraScreenState extends State<CameraScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 64),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.redAccent,
+                size: 64,
+              ),
               const SizedBox(height: 16),
               Text(
                 AppStrings.cameraErrorTitle,
@@ -253,9 +327,7 @@ class _CameraScreenState extends State<CameraScreen>
         fit: StackFit.expand,
         children: [
           // ── Full Screen Live Preview ───────────────────────────────────────
-          Center(
-            child: CameraPreview(controller),
-          ),
+          Center(child: CameraPreview(controller)),
 
           // ── Viewfinder Corner Brackets Overlay ─────────────────────────────
           const CameraViewfinderOverlay(),
@@ -270,6 +342,43 @@ class _CameraScreenState extends State<CameraScreen>
               onBack: () => Navigator.of(context).pop(),
             ),
           ),
+
+          // ── Object Detection Overlay ──────────────────────────────────
+          DetectionOverlay(detections: _detections),
+
+          if (_isDetectionInitializing || _detectionError != null)
+            Positioned(
+              top: 92,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(0, 0, 0, 0.68),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _detectionError != null
+                        ? Colors.redAccent
+                        : Colors.white70,
+                    width: 1.2,
+                  ),
+                ),
+                child: Text(
+                  _detectionError ?? AppStrings.cameraDetectionLoading,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _detectionError != null
+                        ? Colors.redAccent
+                        : Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
 
           // ── Bottom Controls Bar ────────────────────────────────────────────
           Positioned(

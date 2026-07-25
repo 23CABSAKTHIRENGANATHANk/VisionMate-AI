@@ -46,6 +46,15 @@ dependencies:
   # Permission Handler — runtime permission requests (camera).
   permission_handler: ^12.0.0
 
+  # Flutter TTS — accessible speech synthesis for voice guidance.
+  flutter_tts: ^4.0.0
+
+  # TensorFlow Lite runtime for on-device AI inference.
+  tflite_flutter: ^0.9.0
+
+  # Image utilities for frame preprocessing and rotation handling.
+  image: ^3.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -64,6 +73,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/models/ssd_mobilenet.tflite
+    - assets/models/ssd_mobilenet_labels.txt
 
   # To add assets to your application, add an assets section, like this:
   # assets:
