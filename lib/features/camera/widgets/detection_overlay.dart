@@ -2,19 +2,34 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../services/navigation_pipeline_processor.dart';
+import '../../../services/obstacle_priority_analyzer.dart';
 import '../../detection/detection_result.dart';
 
-/// Paints detected object bounding boxes and labels on top of the camera view.
+/// Paints detected object bounding boxes, priority color coding, distance estimations,
+/// and labels on top of the camera view.
 class DetectionOverlay extends StatelessWidget {
-  const DetectionOverlay({super.key, required this.detections});
+  const DetectionOverlay({
+    super.key,
+    required this.detections,
+    this.processor,
+  });
 
   final List<DetectionResult> detections;
+  final NavigationPipelineProcessor? processor;
 
   @override
   Widget build(BuildContext context) {
+    if (detections.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final pipelineProcessor = processor ?? NavigationPipelineProcessor.instance;
+    final navData = pipelineProcessor.process(detections);
+
     return IgnorePointer(
       child: CustomPaint(
-        painter: _DetectionPainter(detections: detections),
+        painter: _DetectionPainter(obstacles: navData.obstacles),
         size: Size.infinite,
       ),
     );
@@ -22,22 +37,25 @@ class DetectionOverlay extends StatelessWidget {
 }
 
 class _DetectionPainter extends CustomPainter {
-  _DetectionPainter({required this.detections});
+  _DetectionPainter({required this.obstacles});
 
-  final List<DetectionResult> detections;
+  final List<ProcessedObstacle> obstacles;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final boxPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..color = Colors.greenAccent;
+    for (final obstacle in obstacles) {
+      final detection = obstacle.detection;
+      final color = obstacle.tierColor;
 
-    final fillPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = const Color.fromRGBO(0, 0, 0, 0.45);
+      final boxPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = obstacle.priorityTier == ObstaclePriorityTier.critical ? 4.0 : 3.0
+        ..color = color;
 
-    for (final detection in detections) {
+      final fillPaint = Paint()
+        ..style = PaintingStyle.fill
+        ..color = const Color.fromRGBO(0, 0, 0, 0.70);
+
       final rect = Rect.fromLTRB(
         detection.rect.left * size.width,
         detection.rect.top * size.height,
@@ -45,11 +63,13 @@ class _DetectionPainter extends CustomPainter {
         detection.rect.bottom * size.height,
       ).deflate(2);
 
+      // Draw bounding box rect
       canvas.drawRect(rect, boxPaint);
 
+      // Label text with distance & confidence
       final textSpan = TextSpan(
         text:
-            '${detection.label} ${(detection.confidence * 100).toStringAsFixed(0)}%',
+            '${detection.label} • ${obstacle.distance.formattedDistance} (${(detection.confidence * 100).toStringAsFixed(0)}%)',
         style: const TextStyle(
           color: Colors.white,
           fontSize: 12,
@@ -61,25 +81,36 @@ class _DetectionPainter extends CustomPainter {
         text: textSpan,
         textDirection: TextDirection.ltr,
         maxLines: 1,
-      )..layout(maxWidth: size.width - 16);
+      )..layout(maxWidth: max(100.0, size.width - 32));
 
       final labelRect = Rect.fromLTWH(
         rect.left,
-        max(0.0, rect.top - tp.height - 6),
-        tp.width + 12,
+        max(0.0, rect.top - tp.height - 8),
+        tp.width + 14,
         tp.height + 8,
       );
 
+      // Draw label background pill with priority border indicator
       canvas.drawRRect(
-        RRect.fromRectAndRadius(labelRect, const Radius.circular(8)),
+        RRect.fromRectAndRadius(labelRect, const Radius.circular(6)),
         fillPaint,
       );
-      tp.paint(canvas, Offset(labelRect.left + 6, labelRect.top + 4));
+
+      final borderPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = color;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(labelRect, const Radius.circular(6)),
+        borderPaint,
+      );
+
+      tp.paint(canvas, Offset(labelRect.left + 7, labelRect.top + 4));
     }
   }
 
   @override
   bool shouldRepaint(covariant _DetectionPainter oldDelegate) {
-    return oldDelegate.detections != detections;
+    return oldDelegate.obstacles != obstacles;
   }
 }

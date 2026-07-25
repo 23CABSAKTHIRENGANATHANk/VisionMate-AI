@@ -12,6 +12,8 @@
 //   • Fully accessible with Material 3 styling and zero memory leaks.
 // ---------------------------------------------------------------------------
 
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -19,8 +21,11 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../services/camera_service.dart';
+import '../../services/navigation_pipeline_processor.dart';
 import '../../services/object_detection_service.dart';
+import '../../services/obstacle_priority_analyzer.dart';
 import '../detection/detection_result.dart';
+import '../voice/voice_service.dart';
 import 'camera_permission_screen.dart';
 import 'widgets/camera_controls_bar.dart';
 import 'widgets/camera_top_bar.dart';
@@ -51,18 +56,26 @@ class _CameraScreenState extends State<CameraScreen>
   final ObjectDetectionService _detectionService =
       ObjectDetectionService.instance;
 
+  final NavigationPipelineProcessor _pipelineProcessor =
+      NavigationPipelineProcessor.instance;
+
   _CameraPhase _phase = _CameraPhase.checkingPermission;
   bool _isSwitching = false;
   bool _isDetectionInitializing = true;
   String? _detectionError;
   List<DetectionResult> _detections = const <DetectionResult>[];
+  String _lastVoiceGuidance = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initializeObjectDetection();
-    _checkPermissionAndInitialize();
+
+    // Start camera permission and preview init immediately.
+    unawaited(_checkPermissionAndInitialize());
+
+    // Load the detection model in the background so the camera can appear faster.
+    unawaited(_loadDetectionModel());
   }
 
   @override
@@ -122,14 +135,41 @@ class _CameraScreenState extends State<CameraScreen>
     if (!mounted) return;
     setState(() => _phase = _CameraPhase.initializing);
 
-    final success = await _cameraService.initialize();
+    final cameraReady = await _cameraService.initialize();
     if (!mounted) return;
 
-    if (success) {
-      await _startDetectionStream();
+    if (cameraReady) {
       setState(() => _phase = _CameraPhase.ready);
+      await _startDetectionStream();
     } else {
       setState(() => _phase = _CameraPhase.error);
+    }
+  }
+
+  Future<void> _loadDetectionModel() async {
+    if (_detectionService.isLoaded) return;
+    setState(() => _isDetectionInitializing = true);
+
+    try {
+      await _detectionService.initialize();
+      if (!mounted) return;
+
+      if (_cameraService.isReady) {
+        await _startDetectionStream();
+      }
+
+      setState(() {
+        _isDetectionInitializing = false;
+        _detectionError = null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isDetectionInitializing = false;
+          _detectionError =
+              _detectionService.lastError ?? 'AI model unavailable';
+        });
+      }
     }
   }
 
@@ -166,22 +206,6 @@ class _CameraScreenState extends State<CameraScreen>
     );
   }
 
-  Future<void> _initializeObjectDetection() async {
-    await _detectionService.initialize();
-    if (!mounted) return;
-
-    setState(() {
-      _isDetectionInitializing = false;
-      _detectionError = _detectionService.isLoaded
-          ? null
-          : _detectionService.lastError ?? 'AI model failed to initialise.';
-    });
-
-    if (_detectionService.isLoaded && _cameraService.isReady) {
-      await _startDetectionStream();
-    }
-  }
-
   Future<void> _startDetectionStream() async {
     if (!_detectionService.isLoaded || !_cameraService.isReady) return;
 
@@ -213,8 +237,18 @@ class _CameraScreenState extends State<CameraScreen>
   Future<void> _processCameraFrame(DetectionFrame frame) async {
     final detections = await _detectionService.detect(frame);
     if (!mounted) return;
+
     if (!listEquals(detections, _detections)) {
-      setState(() => _detections = detections);
+      final navData = _pipelineProcessor.process(detections);
+      if (navData.shouldSpeak &&
+          navData.voiceGuidanceText != _lastVoiceGuidance) {
+        _lastVoiceGuidance = navData.voiceGuidanceText;
+        VoiceService.instance.speak(navData.voiceGuidanceText);
+      }
+
+      setState(() {
+        _detections = detections;
+      });
     }
   }
 
@@ -329,6 +363,9 @@ class _CameraScreenState extends State<CameraScreen>
           // ── Full Screen Live Preview ───────────────────────────────────────
           Center(child: CameraPreview(controller)),
 
+          // ── Live bounding boxes and priority overlays ────────────────────
+          DetectionOverlay(detections: _detections),
+
           // ── Viewfinder Corner Brackets Overlay ─────────────────────────────
           const CameraViewfinderOverlay(),
 
@@ -342,9 +379,6 @@ class _CameraScreenState extends State<CameraScreen>
               onBack: () => Navigator.of(context).pop(),
             ),
           ),
-
-          // ── Object Detection Overlay ──────────────────────────────────
-          DetectionOverlay(detections: _detections),
 
           if (_isDetectionInitializing || _detectionError != null)
             Positioned(

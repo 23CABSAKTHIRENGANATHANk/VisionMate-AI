@@ -22,11 +22,13 @@ class ObjectDetectionService {
   List<String> _labels = [];
 
   bool _isLoaded = false;
+  bool _isInitializing = false;
   bool _isProcessing = false;
 
   /// Image dimensions expected by the model.
   late final int inputWidth;
   late final int inputHeight;
+  late final int inputType; // 1=uint8, 4=float32
 
   /// Minimum detection confidence threshold.
   double confidenceThreshold = 0.50;
@@ -35,15 +37,22 @@ class ObjectDetectionService {
 
   bool get isLoaded => _isLoaded;
 
-  /// Loads the model and label file from assets.
-  late final TfLiteType inputType;
-
+  /// Loads the model and label file from assets in parallel.
   Future<void> initialize() async {
-    if (_isLoaded) return;
+    if (_isLoaded || _isInitializing) return;
+
+    _isInitializing = true;
 
     try {
-      _interpreter = await Interpreter.fromAsset(modelAsset);
-      final labelData = await rootBundle.loadString(labelsAsset);
+      // Load model and labels in parallel
+      final results = await Future.wait<dynamic>([
+        Interpreter.fromAsset(modelAsset),
+        rootBundle.loadString(labelsAsset),
+      ], eagerError: true);
+
+      _interpreter = results[0] as Interpreter;
+      final labelData = results[1] as String;
+
       _labels = labelData
           .split('\n')
           .map((line) => line.trim())
@@ -54,7 +63,13 @@ class ObjectDetectionService {
       final shape = inputTensor.shape;
       inputHeight = shape[1];
       inputWidth = shape[2];
-      inputType = inputTensor.type;
+      // Store type index: 1=uint8, 4=float32
+      try {
+        final tensorType = inputTensor.type;
+        inputType = tensorType.index;
+      } catch (_) {
+        inputType = 4; // Default to float32
+      }
 
       _isLoaded = true;
       lastError = null;
@@ -62,6 +77,8 @@ class ObjectDetectionService {
       lastError = 'AI model failed to load.';
       debugPrint('[ObjectDetectionService] initialize error: $e');
       _isLoaded = false;
+    } finally {
+      _isInitializing = false;
     }
   }
 
@@ -137,7 +154,7 @@ class ObjectDetectionService {
           final green = img.getGreen(pixel).toDouble();
           final blue = img.getBlue(pixel).toDouble();
 
-          if (inputType == TfLiteType.uint8) {
+          if (inputType == 1) { // TfLiteType.uint8
             return [red.toInt(), green.toInt(), blue.toInt()];
           }
           return [red / 255.0, green / 255.0, blue / 255.0];

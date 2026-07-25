@@ -122,4 +122,7 @@ class AppConstants {
 
   /// Status label shown when the AI model is not yet loaded.
   static const String statusAiNotLoaded = 'AI Not Loaded';
+
+  /// Status label shown when the AI processing pipeline is loaded and ready.
+  static const String statusAiReady = 'AI Pipeline Active';
 }

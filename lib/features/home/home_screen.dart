@@ -435,8 +435,8 @@ class _StatusCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             StatusIndicator(
-              label: AppConstants.statusAiNotLoaded,
-              status: IndicatorStatus.warning,
+              label: AppConstants.statusAiReady,
+              status: IndicatorStatus.ready,
             ),
           ],
         ),
