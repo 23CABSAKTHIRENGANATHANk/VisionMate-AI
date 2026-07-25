@@ -2,34 +2,40 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../../../services/navigation_pipeline_processor.dart';
 import '../../../services/obstacle_priority_analyzer.dart';
 import '../../detection/detection_result.dart';
 
-/// Paints detected object bounding boxes, priority color coding, distance estimations,
-/// and labels on top of the camera view.
+/// Paints detected object bounding boxes, priority color coding, distance
+/// estimations, and labels on top of the camera view.
+///
+/// Accepts pre-computed [obstacles] from the parent state so that the full
+/// 7-stage navigation pipeline is NOT run on every widget rebuild (which
+/// previously caused main-thread jank on every orientation change, scroll,
+/// or setState).
 class DetectionOverlay extends StatelessWidget {
   const DetectionOverlay({
     super.key,
-    required this.detections,
-    this.processor,
+    required this.obstacles,
+    // Legacy support: raw detections accepted but ignored (obstacles drive rendering)
+    this.detections = const <DetectionResult>[],
   });
 
+  /// Pre-processed obstacles sorted by priority (highest first).
+  /// Computed once per AI frame in [CameraScreen._processCameraFrame].
+  final List<ProcessedObstacle> obstacles;
+
+  /// Raw detections — retained for API compatibility but not used in build.
   final List<DetectionResult> detections;
-  final NavigationPipelineProcessor? processor;
 
   @override
   Widget build(BuildContext context) {
-    if (detections.isEmpty) {
+    if (obstacles.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final pipelineProcessor = processor ?? NavigationPipelineProcessor.instance;
-    final navData = pipelineProcessor.process(detections);
-
     return IgnorePointer(
       child: CustomPaint(
-        painter: _DetectionPainter(obstacles: navData.obstacles),
+        painter: _DetectionPainter(obstacles: obstacles),
         size: Size.infinite,
       ),
     );
@@ -49,7 +55,8 @@ class _DetectionPainter extends CustomPainter {
 
       final boxPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = obstacle.priorityTier == ObstaclePriorityTier.critical ? 4.0 : 3.0
+        ..strokeWidth =
+            obstacle.priorityTier == ObstaclePriorityTier.critical ? 4.0 : 3.0
         ..color = color;
 
       final fillPaint = Paint()

@@ -1,7 +1,4 @@
-// Model representing a detected object for future AI integrations.
-class ObjectModel {
-  const ObjectModel({required this.label, required this.confidence});
-
-  final String label;
-  final double confidence;
-}
+// object_model.dart was removed.
+// ObjectModel was unused dead code — DetectionResult in
+// features/detection/detection_result.dart serves the same purpose
+// and is the canonical model throughout the codebase.

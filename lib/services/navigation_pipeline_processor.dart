@@ -8,7 +8,12 @@ import 'position_analyzer.dart';
 
 /// Central coordinator that executes the VisionMate AI processing pipeline:
 ///
-/// Camera → AI Detection → Bounding Boxes → Position Analyzer → Distance Estimator → Obstacle Priority → Navigation Data
+/// Camera → AI Detection → Bounding Boxes → Position Analyzer →
+/// Distance Estimator → Obstacle Priority → Navigation Data
+///
+/// When detections are empty the pipeline routes through [DecisionEngine]
+/// so that "PATH CLEAR" announcements are subject to the same 3-second
+/// cooldown as obstacle commands, preventing startup spam.
 class NavigationPipelineProcessor {
   NavigationPipelineProcessor({
     PositionAnalyzer? positionAnalyzer,
@@ -32,9 +37,22 @@ class NavigationPipelineProcessor {
   final DecisionEngine _decisionEngine;
 
   /// Processes raw bounding box detection results into complete [NavigationData].
+  ///
+  /// When [detections] is empty the decision engine is still consulted so that
+  /// "PATH CLEAR" is emitted only once per cooldown window (not on every frame).
   NavigationData process(List<DetectionResult> detections) {
     if (detections.isEmpty) {
-      return NavigationData.clear();
+      // Route through decision engine to apply cooldown to "PATH CLEAR".
+      final decision = _decisionEngine.decideFrom([]);
+      return NavigationData(
+        timestamp: DateTime.now(),
+        obstacles: const <ProcessedObstacle>[],
+        primaryObstacle: null,
+        voiceGuidanceText: decision.guidanceText,
+        shouldSpeak: decision.shouldSpeak,
+        hapticAlertLevel: HapticAlertLevel.none,
+        pathState: PathState.clear,
+      );
     }
 
     final processedList = <ProcessedObstacle>[];

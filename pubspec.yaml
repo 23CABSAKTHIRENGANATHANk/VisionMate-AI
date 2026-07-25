@@ -50,7 +50,7 @@ dependencies:
   flutter_tts: ^4.0.0
 
   # TensorFlow Lite runtime for on-device AI inference.
-  tflite_flutter: ^0.10.4
+  tflite_flutter: ^0.12.1
 
   # Image utilities for frame preprocessing and rotation handling.
   image: ^3.0.2

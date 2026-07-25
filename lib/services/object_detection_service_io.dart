@@ -234,26 +234,52 @@ class DetectionPlane {
   final int bytesPerPixel;
 }
 
+// ---------------------------------------------------------------------------
+// Top-level isolate functions (must be top-level or static for compute()).
+// ---------------------------------------------------------------------------
+
+/// Dispatches to the correct format converter based on [DetectionFrame.formatGroup].
+///
+/// Supports:
+/// - [ImageFormatGroup.yuv420] — standard Android YUV420 (most flagships)
+/// - [ImageFormatGroup.nv21]   — Android NV21 (common on mid-range devices)
+/// - [ImageFormatGroup.bgra8888] — iOS and desktop
 img.Image _convertDetectionFrame(DetectionFrame frame) {
   if (frame.formatGroup == ImageFormatGroup.yuv420.index) {
     return _convertYUV420Frame(frame);
   }
-
-  throw StateError('Unsupported image format: ${frame.formatGroup}');
+  if (frame.formatGroup == ImageFormatGroup.nv21.index) {
+    return _convertNV21Frame(frame);
+  }
+  if (frame.formatGroup == ImageFormatGroup.bgra8888.index) {
+    return _convertBGRA8888Frame(frame);
+  }
+  // Log and return a blank frame rather than crashing the isolate.
+  debugPrint(
+    '[ObjectDetectionService] Unsupported image format index: ${frame.formatGroup}. '
+    'Returning blank frame.',
+  );
+  return img.Image(frame.width, frame.height);
 }
 
+/// Converts YUV420 (4:2:0 planar) camera frame to RGB.
+///
+/// Used by most flagship Android devices and iOS in yuv420 mode.
 img.Image _convertYUV420Frame(DetectionFrame frame) {
   final width = frame.width;
   final height = frame.height;
   final yPlane = frame.planes[0];
   final uPlane = frame.planes[1];
   final vPlane = frame.planes[2];
+
+  // image v3: use positional constructor
   final image = img.Image(width, height);
 
   for (var y = 0; y < height; y++) {
     for (var x = 0; x < width; x++) {
       final yIndex = y * yPlane.bytesPerRow + x;
       final uvIndex = (y ~/ 2) * uPlane.bytesPerRow + (x ~/ 2);
+
       final yValue = yPlane.bytes[yIndex];
       final uValue = uPlane.bytes[uvIndex];
       final vValue = vPlane.bytes[uvIndex];
@@ -262,17 +288,80 @@ img.Image _convertYUV420Frame(DetectionFrame frame) {
       final uScaled = uValue.toInt() - 128;
       final vScaled = vValue.toInt() - 128;
 
-      var r = yScaled + 1.402 * vScaled;
-      var g = yScaled - 0.34414 * uScaled - 0.71414 * vScaled;
-      var b = yScaled + 1.772 * uScaled;
+      final r = (yScaled + 1.402 * vScaled).clamp(0, 255).toInt();
+      final g = (yScaled - 0.34414 * uScaled - 0.71414 * vScaled)
+          .clamp(0, 255)
+          .toInt();
+      final b = (yScaled + 1.772 * uScaled).clamp(0, 255).toInt();
 
-      r = r.clamp(0, 255);
-      g = g.clamp(0, 255);
-      b = b.clamp(0, 255);
-
-      image.setPixelRgba(x, y, r.toInt(), g.toInt(), b.toInt());
+      // image v3: explicit alpha argument
+      image.setPixelRgba(x, y, r, g, b, 255);
     }
   }
 
-  return img.copyRotate(image, 90);
+  // image v3: named angle parameter
+  return img.copyRotate(image, angle: 90);
+}
+
+/// Converts NV21 (semi-planar YVU) camera frame to RGB.
+///
+/// NV21 is the default format on many mid-range Android devices. It uses a
+/// single Y plane and an interleaved V,U plane (reversed vs NV12).
+img.Image _convertNV21Frame(DetectionFrame frame) {
+  final width = frame.width;
+  final height = frame.height;
+  final yPlane = frame.planes[0];
+  // NV21: second plane interleaves V then U bytes
+  final vuPlane = frame.planes[1];
+
+  final image = img.Image(width, height);
+
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final yIdx = y * yPlane.bytesPerRow + x;
+      // Each 2x2 block of pixels shares one UV pair
+      final uvIdx = (y ~/ 2) * vuPlane.bytesPerRow + (x ~/ 2) * 2;
+
+      final yS = yPlane.bytes[yIdx];
+      // NV21 order: V first, then U
+      final vS = vuPlane.bytes[uvIdx] - 128;
+      final uS = vuPlane.bytes[uvIdx + 1] - 128;
+
+      final r = (yS + 1.402 * vS).clamp(0, 255).toInt();
+      final g = (yS - 0.34414 * uS - 0.71414 * vS).clamp(0, 255).toInt();
+      final b = (yS + 1.772 * uS).clamp(0, 255).toInt();
+
+      image.setPixelRgba(x, y, r, g, b, 255);
+    }
+  }
+
+  return img.copyRotate(image, angle: 90);
+}
+
+/// Converts BGRA8888 camera frame to RGB.
+///
+/// Used on iOS devices and macOS/Windows desktop via the camera plugin.
+img.Image _convertBGRA8888Frame(DetectionFrame frame) {
+  final width = frame.width;
+  final height = frame.height;
+  final plane = frame.planes[0];
+  final bytesPerRow = plane.bytesPerRow;
+  final bytes = plane.bytes;
+
+  final image = img.Image(width, height);
+
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final pixelOffset = y * bytesPerRow + x * 4;
+      final b = bytes[pixelOffset];
+      final g = bytes[pixelOffset + 1];
+      final r = bytes[pixelOffset + 2];
+      // pixelOffset + 3 is alpha — unused
+
+      image.setPixelRgba(x, y, r, g, b, 255);
+    }
+  }
+
+  // BGRA from iOS is already in portrait orientation — no rotation needed.
+  return image;
 }

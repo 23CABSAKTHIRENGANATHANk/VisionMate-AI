@@ -110,12 +110,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Builds the bottom navigation bar with four placeholder tabs.
+  /// Builds the bottom navigation bar, wired to actual named routes.
   Widget _buildBottomNavBar() {
     return NavigationBar(
       selectedIndex: _selectedNavIndex,
       onDestinationSelected: (index) {
         setState(() => _selectedNavIndex = index);
+        switch (index) {
+          case 0:
+            break; // Already on Home — no push needed.
+          case 1:
+            Navigator.of(context).pushNamed(AppConstants.routeCamera);
+            break;
+          case 2:
+            Navigator.of(context).pushNamed(AppConstants.routeSettings);
+            break;
+          case 3:
+            Navigator.of(context).pushNamed(AppConstants.routeHelp);
+            break;
+        }
       },
       destinations: const [
         NavigationDestination(

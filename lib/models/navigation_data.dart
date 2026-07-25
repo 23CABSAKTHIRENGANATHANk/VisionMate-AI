@@ -67,13 +67,19 @@ class NavigationData {
   bool get hasObstacles => obstacles.isNotEmpty;
 
   /// Factory constructor for empty/clear navigation state.
+  ///
+  /// Note: [shouldSpeak] is intentionally [false] here. In the main pipeline,
+  /// empty-detection "PATH CLEAR" announcements are produced by [DecisionEngine]
+  /// (which applies the 3-second cooldown). This factory is kept as a safe
+  /// fallback for callers that need a neutral NavigationData without triggering
+  /// speech.
   factory NavigationData.clear() {
     return NavigationData(
       timestamp: DateTime.now(),
       obstacles: const <ProcessedObstacle>[],
       primaryObstacle: null,
       voiceGuidanceText: 'PATH CLEAR',
-      shouldSpeak: true,
+      shouldSpeak: false,
       hapticAlertLevel: HapticAlertLevel.none,
       pathState: PathState.clear,
     );

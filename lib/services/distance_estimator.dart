@@ -43,8 +43,25 @@ class DistanceData {
 }
 
 /// Estimates physical distance of objects from normalized bounding box dimensions.
+///
+/// ## Calibration note
+/// The bounding-box height thresholds (nearHeightThreshold = 0.45,
+/// mediumHeightThreshold = 0.20) are kept consistent with the spatial
+/// module's [features/spatial/analyzers/distance_estimator.dart] so that
+/// both pipeline branches (NavigationPipelineProcessor and SpatialProcessor)
+/// agree on near / medium / far classification for the same detection.
 class DistanceEstimator {
-  const DistanceEstimator();
+  const DistanceEstimator({
+    this.nearHeightThreshold = 0.45,
+    this.mediumHeightThreshold = 0.20,
+  });
+
+  /// Box height fraction above which the object is classified as near/immediate.
+  /// Aligned with features/spatial/analyzers/distance_estimator.dart nearHeightThreshold.
+  final double nearHeightThreshold;
+
+  /// Box height fraction above which the object is classified as medium distance.
+  final double mediumHeightThreshold;
 
   /// Approximate physical heights (in meters) for standard detected object classes.
   static const Map<String, double> _objectReferenceHeights = {
@@ -72,10 +89,19 @@ class DistanceEstimator {
     'potted plant': 0.60,
   };
 
-  /// Default focal-length scaling constant calibrated for modern smartphone vertical FOV (~60°).
+  /// Default focal-length scaling constant calibrated for modern smartphone
+  /// vertical FOV (~60°).
   static const double _focalScaleFactor = 0.85;
 
-  /// Estimates the distance in meters given a object label and normalized bounding box.
+  /// Estimates the distance in meters given an object label and normalized
+  /// bounding box.
+  ///
+  /// The result uses a two-step approach:
+  /// 1. Pinhole camera approximation from real object height and focal scale.
+  /// 2. Bounding-box height override: if the box height exceeds the near
+  ///    threshold the category is forced to [ProximityCategory.immediate]
+  ///    regardless of the formula result — keeping parity with the spatial
+  ///    analyzer's threshold-based classification.
   DistanceData estimate(String label, Rect normalizedRect) {
     final lowerLabel = label.toLowerCase().trim();
     final realHeight = _objectReferenceHeights[lowerLabel] ?? 1.0;
@@ -83,16 +109,25 @@ class DistanceEstimator {
     // Use normalized box height (clamp to avoid division by zero)
     final boxHeightNormalized = normalizedRect.height.clamp(0.02, 1.0);
 
-    // Pinhole camera equation approximation: D = (RealHeight * FocalScale) / NormalizedBoxHeight
-    double distanceMeters = (realHeight * _focalScaleFactor) / boxHeightNormalized;
+    // Pinhole camera equation approximation:
+    //   D = (RealHeight * FocalScale) / NormalizedBoxHeight
+    double distanceMeters =
+        (realHeight * _focalScaleFactor) / boxHeightNormalized;
 
-    // Clamp distance between 0.3m and 15.0m for safety boundaries
+    // Clamp distance between 0.3 m and 15.0 m for safety boundaries.
     distanceMeters = distanceMeters.clamp(0.3, 15.0);
 
+    // ── Determine proximity category ─────────────────────────────────────────
+    //
+    // Box-height override ensures consistency with the spatial analyzer:
+    // if the bounding box fills ≥ 45 % of the frame height the object is
+    // by definition very close — classify as immediate.
     final ProximityCategory category;
-    if (distanceMeters < 1.0) {
+    if (normalizedRect.height >= nearHeightThreshold ||
+        distanceMeters < 1.0) {
       category = ProximityCategory.immediate;
-    } else if (distanceMeters < 3.0) {
+    } else if (normalizedRect.height >= mediumHeightThreshold ||
+        distanceMeters < 3.0) {
       category = ProximityCategory.near;
     } else if (distanceMeters < 5.0) {
       category = ProximityCategory.medium;

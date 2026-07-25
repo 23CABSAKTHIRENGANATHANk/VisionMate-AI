@@ -30,7 +30,7 @@ class AppStrings {
   static const String statusCardTitle = 'System Status';
 
   /// Subtitle on the status card inside the Home screen.
-  static const String statusCardSubtitle = 'Module 2 — UI Ready';
+  static const String statusCardSubtitle = 'AI Pipeline Active';
 
   // ── Camera Screen ─────────────────────────────────────────────────────────
 

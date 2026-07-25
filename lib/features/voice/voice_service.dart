@@ -113,20 +113,13 @@ class VoiceService {
   }
 
   Future<void> resume() async {
-    if (_isDisposed) {
-      return;
-    }
+    if (_isDisposed || _lastSpokenMessage == null) return;
 
-    if (_lastSpokenMessage == null) {
-      return;
-    }
-
-    try {
-      await _flutterTts.speak(_lastSpokenMessage!);
-    } catch (error) {
-      _lastError = 'Resume is not supported on this platform.';
-      debugPrint('TTS resume fallback failed: $error');
-    }
+    // Reset the suppression window before re-speaking so that if resume() is
+    // called within 2 s of the last utterance the guard does not silently
+    // drop the message — leaving the user with no audio after app resume.
+    _lastSpokenAt = null;
+    await speak(_lastSpokenMessage!);
   }
 
   Future<void> setSpeechRate(double value) async {

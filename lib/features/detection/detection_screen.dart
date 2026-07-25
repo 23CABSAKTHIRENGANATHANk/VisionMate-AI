@@ -1,16 +1,6 @@
-// Placeholder detection screen for object recognition workflows.
-import 'package:flutter/material.dart';
-
-class DetectionScreen extends StatelessWidget {
-  const DetectionScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Detection')),
-      body: const Center(
-        child: Text('Detection experience will be added soon.'),
-      ),
-    );
-  }
-}
+// detection_screen.dart was removed.
+// The DetectionScreen placeholder widget was unreachable (no route registered)
+// and has been deleted. The DetectionResult model in
+// features/detection/detection_result.dart is the correct model still in use.
+// When a full detection-replay screen is needed, register it in AppRouter and
+// AppConstants first, then implement the widget.

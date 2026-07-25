@@ -1,0 +1,111 @@
+00:00 +0: loading c:/workspace/visionmate_ai/test/decision_engine_test.dart
+00:00 +0: c:/workspace/visionmate_ai/test/decision_engine_test.dart: NavigationRules ignores low-confidence and irrelevant objects
+00:00 +1: c:/workspace/visionmate_ai/test/decision_engine_test.dart: NavigationRules returns STOP for critical center obstacles
+00:00 +2: c:/workspace/visionmate_ai/test/decision_engine_test.dart: NavigationRules returns TURN RIGHT for low left obstacles
+00:00 +3: c:/workspace/visionmate_ai/test/decision_engine_test.dart: DecisionEngine selects highest risk obstacle and emits command-only guidance
+00:00 +4: c:/workspace/visionmate_ai/test/decision_engine_test.dart: DecisionEngine suppresses duplicate command within cooldown for same obstacle
+00:00 +5: c:/workspace/visionmate_ai/test/decision_engine_test.dart: DecisionEngine repeats command after cooldown elapses
+00:00 +6: c:/workspace/visionmate_ai/test/decision_engine_test.dart: DecisionEngine speaks again when direction changes even if same command
+lib/services/object_detection_service_io.dart:160:29: Error: The getter 'r' isn't defined for the type 'int'.
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'r'.
+          final red = pixel.r.toDouble();
+                            ^
+lib/services/object_detection_service_io.dart:161:31: Error: The getter 'g' isn't defined for the type 'int'.
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'g'.
+          final green = pixel.g.toDouble();
+                              ^
+lib/services/object_detection_service_io.dart:162:30: Error: The getter 'b' isn't defined for the type 'int'.
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'b'.
+          final blue = pixel.b.toDouble();
+                             ^
+lib/services/object_detection_service_io.dart:263:19: Error: Too few positional arguments: 2 required, 0 given.
+  return img.Image(width: frame.width, height: frame.height);
+                  ^
+/C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/image.dart:102:3: Context: Found this candidate, but the arguments don't match.
+  Image(this.width, this.height,
+  ^^^^^
+lib/services/object_detection_service_io.dart:277:26: Error: Too few positional arguments: 2 required, 0 given.
+  final image = img.Image(width: width, height: height);
+                         ^
+/C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/image.dart:102:3: Context: Found this candidate, but the arguments don't match.
+  Image(this.width, this.height,
+  ^^^^^
+lib/services/object_detection_service_io.dart:304:24: Error: Too few positional arguments: 2 required, 1 given.
+  return img.copyRotate(image, angle: 90);
+                       ^
+/C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/transform/copy_rotate.dart:7:7: Context: Found this candidate, but the arguments don't match.
+Image copyRotate(Image src, num angle,
+      ^^^^^^^^^^
+lib/services/object_detection_service_io.dart:318:26: Error: Too few positional arguments: 2 required, 0 given.
+  final image = img.Image(width: width, height: height);
+                         ^
+/C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/image.dart:102:3: Context: Found this candidate, but the arguments don't match.
+  Image(this.width, this.height,
+  ^^^^^
+lib/services/object_detection_service_io.dart:339:24: Error: Too few positional arguments: 2 required, 1 given.
+  return img.copyRotate(image, angle: 90);
+                       ^
+/C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/transform/copy_rotate.dart:7:7: Context: Found this candidate, but the arguments don't match.
+Image copyRotate(Image src, num angle,
+      ^^^^^^^^^^
+lib/services/object_detection_service_io.dart:352:26: Error: Too few positional arguments: 2 required, 0 given.
+  final image = img.Image(width: width, height: height);
+                         ^
+/C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/image.dart:102:3: Context: Found this candidate, but the arguments don't match.
+  Image(this.width, this.height,
+  ^^^^^
+00:07 +7 -1: loading c:/workspace/visionmate_ai/test/widget_test.dart [E]
+  Failed to load "c:/workspace/visionmate_ai/test/widget_test.dart":
+  Compilation failed for testPath=c:/workspace/visionmate_ai/test/widget_test.dart: lib/services/object_detection_service_io.dart:160:29: Error: The getter 'r' isn't defined for the type 'int'.
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'r'.
+            final red = pixel.r.toDouble();
+                              ^
+  lib/services/object_detection_service_io.dart:161:31: Error: The getter 'g' isn't defined for the type 'int'.
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'g'.
+            final green = pixel.g.toDouble();
+                                ^
+  lib/services/object_detection_service_io.dart:162:30: Error: The getter 'b' isn't defined for the type 'int'.
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'b'.
+            final blue = pixel.b.toDouble();
+                               ^
+  lib/services/object_detection_service_io.dart:263:19: Error: Too few positional arguments: 2 required, 0 given.
+    return img.Image(width: frame.width, height: frame.height);
+                    ^
+  /C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/image.dart:102:3: Context: Found this candidate, but the arguments don't match.
+    Image(this.width, this.height,
+    ^^^^^
+  lib/services/object_detection_service_io.dart:277:26: Error: Too few positional arguments: 2 required, 0 given.
+    final image = img.Image(width: width, height: height);
+                           ^
+  /C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/image.dart:102:3: Context: Found this candidate, but the arguments don't match.
+    Image(this.width, this.height,
+    ^^^^^
+  lib/services/object_detection_service_io.dart:304:24: Error: Too few positional arguments: 2 required, 1 given.
+    return img.copyRotate(image, angle: 90);
+                         ^
+  /C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/transform/copy_rotate.dart:7:7: Context: Found this candidate, but the arguments don't match.
+  Image copyRotate(Image src, num angle,
+        ^^^^^^^^^^
+  lib/services/object_detection_service_io.dart:318:26: Error: Too few positional arguments: 2 required, 0 given.
+    final image = img.Image(width: width, height: height);
+                           ^
+  /C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/image.dart:102:3: Context: Found this candidate, but the arguments don't match.
+    Image(this.width, this.height,
+    ^^^^^
+  lib/services/object_detection_service_io.dart:339:24: Error: Too few positional arguments: 2 required, 1 given.
+    return img.copyRotate(image, angle: 90);
+                         ^
+  /C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/transform/copy_rotate.dart:7:7: Context: Found this candidate, but the arguments don't match.
+  Image copyRotate(Image src, num angle,
+        ^^^^^^^^^^
+  lib/services/object_detection_service_io.dart:352:26: Error: Too few positional arguments: 2 required, 0 given.
+    final image = img.Image(width: width, height: height);
+                           ^
+  /C:/Users/sakth/AppData/Local/Pub/Cache/hosted/pub.dev/image-3.3.0/lib/src/image.dart:102:3: Context: Found this candidate, but the arguments don't match.
+    Image(this.width, this.height,
+    ^^^^^
+  .
+00:07 +7 -1: Some tests failed.
+
+Failing tests:
+  c:/workspace/visionmate_ai/test/widget_test.dart: loading c:/workspace/visionmate_ai/test/widget_test.dart

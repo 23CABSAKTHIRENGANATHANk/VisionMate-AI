@@ -27,7 +27,7 @@ class AppConstants {
   static const String appVersion = '2.0.0';
 
   /// Module version label for the About section.
-  static const String moduleVersion = 'Module 2 — UI & Navigation';
+  static const String moduleVersion = 'Full AI Navigation Pipeline';
 
   // ── Named Routes ──────────────────────────────────────────────────────────
 

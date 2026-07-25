@@ -22,6 +22,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/constants/app_strings.dart';
 import '../../services/camera_service.dart';
 import '../../services/navigation_pipeline_processor.dart';
+import '../../services/obstacle_priority_analyzer.dart';
 import '../../services/object_detection_service.dart';
 import '../detection/detection_result.dart';
 import '../voice/voice_service.dart';
@@ -66,10 +67,27 @@ class _CameraScreenState extends State<CameraScreen>
   bool _isDetectionInitializing = true;
   bool _isStartingDetectionStream = false;
   String? _detectionError;
+
   List<DetectionResult> _detections = const <DetectionResult>[];
-  String _lastVoiceGuidance = '';
+
+  /// Pre-computed obstacles from the pipeline — passed directly to DetectionOverlay
+  /// so the full pipeline is NOT run inside build() on every frame.
+  List<ProcessedObstacle> _processedObstacles = const <ProcessedObstacle>[];
+
+  /// Tracks the last spoken guidance text to avoid repeating identical announcements.
+  // Pre-initialize to 'PATH CLEAR' so the app does not speak "PATH CLEAR"
+  // on cold start when the camera view first opens to an empty scene.
+  String _lastVoiceGuidance = 'PATH CLEAR';
+
+  /// Rate-limit timestamp: last time _onCameraImageAvailable passed a frame.
   DateTime _lastFrameProcessedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Hash of the last processed scene — used to skip redundant AI calls.
   String _lastSceneHash = '';
+
+  /// Tracks the last time the scene CHANGED — fixes the scene-retention
+  /// timestamp bug where _lastFrameProcessedAt was always the current frame.
+  DateTime _lastSceneChangedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -279,18 +297,30 @@ class _CameraScreenState extends State<CameraScreen>
     if (!mounted) return;
 
     final sceneHash = _generateSceneHash(detections);
+
+    // FIX (MED-2): Use _lastSceneChangedAt instead of _lastFrameProcessedAt.
+    // _lastFrameProcessedAt is updated at frame ARRIVAL (not scene change),
+    // so the old check always had a near-zero diff. This field only updates
+    // when the scene actually changes.
     final isSameScene =
         sceneHash == _lastSceneHash &&
-        DateTime.now().difference(_lastFrameProcessedAt) < _sameSceneRetention;
+        DateTime.now().difference(_lastSceneChangedAt) < _sameSceneRetention;
 
     if (isSameScene) {
       return;
     }
 
-    _lastSceneHash = sceneHash;
+    // Update scene tracking when content changes.
+    if (sceneHash != _lastSceneHash) {
+      _lastSceneHash = sceneHash;
+      _lastSceneChangedAt = DateTime.now();
+    }
 
     if (!listEquals(detections, _detections)) {
+      // FIX (MED-1): Run pipeline once here and store results.
+      // DetectionOverlay now receives pre-computed obstacles, not raw detections.
       final navData = _pipelineProcessor.process(detections);
+
       if (navData.shouldSpeak &&
           navData.voiceGuidanceText != _lastVoiceGuidance) {
         _lastVoiceGuidance = navData.voiceGuidanceText;
@@ -299,6 +329,7 @@ class _CameraScreenState extends State<CameraScreen>
 
       setState(() {
         _detections = detections;
+        _processedObstacles = navData.obstacles;
       });
     }
   }
@@ -435,8 +466,12 @@ class _CameraScreenState extends State<CameraScreen>
           // ── Full Screen Live Preview ───────────────────────────────────────
           Center(child: CameraPreview(controller)),
 
-          // ── Live bounding boxes and priority overlays ────────────────────
-          DetectionOverlay(detections: _detections),
+          // ── Live bounding boxes: pre-computed obstacles, not raw detections ─
+          // FIX (MED-1): Pass _processedObstacles to avoid pipeline in build().
+          DetectionOverlay(
+            obstacles: _processedObstacles,
+            detections: _detections,
+          ),
 
           // ── Viewfinder Corner Brackets Overlay ─────────────────────────────
           const CameraViewfinderOverlay(),
