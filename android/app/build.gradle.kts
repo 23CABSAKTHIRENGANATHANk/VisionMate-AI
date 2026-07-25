@@ -27,7 +27,7 @@ android {
     defaultConfig {
         applicationId = "com.example.visionmate_ai"
         // camera package requires minSdk 21 (Android 5.0 Lollipop).
-        minSdk = 21
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
