@@ -299,8 +299,7 @@ img.Image _convertYUV420Frame(DetectionFrame frame) {
     }
   }
 
-  // image v3: named angle parameter
-  return img.copyRotate(image, angle: 90);
+  return img.copyRotate(image, 90);
 }
 
 /// Converts NV21 (semi-planar YVU) camera frame to RGB.
@@ -335,7 +334,7 @@ img.Image _convertNV21Frame(DetectionFrame frame) {
     }
   }
 
-  return img.copyRotate(image, angle: 90);
+  return img.copyRotate(image, 90);
 }
 
 /// Converts BGRA8888 camera frame to RGB.
