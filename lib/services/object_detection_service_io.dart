@@ -21,6 +21,11 @@ class ObjectDetectionService {
   Interpreter? _interpreter;
   List<String> _labels = [];
 
+  late final List<List<List<double>>> _outputLocations;
+  late final List<List<double>> _outputClasses;
+  late final List<List<double>> _outputScores;
+  late final List<double> _numDetections;
+
   bool _isLoaded = false;
   bool _isInitializing = false;
   bool _isProcessing = false;
@@ -36,6 +41,8 @@ class ObjectDetectionService {
   String? lastError;
 
   bool get isLoaded => _isLoaded;
+
+  bool get isProcessing => _isProcessing;
 
   /// Loads the model and label file from assets in parallel.
   Future<void> initialize() async {
@@ -60,6 +67,13 @@ class ObjectDetectionService {
           .toList();
 
       final inputTensor = _interpreter!.getInputTensor(0);
+      _outputLocations = List.generate(
+        1,
+        (_) => List.generate(10, (_) => List.filled(4, 0.0)),
+      );
+      _outputClasses = List.generate(1, (_) => List.filled(10, 0.0));
+      _outputScores = List.generate(1, (_) => List.filled(10, 0.0));
+      _numDetections = List.filled(1, 0.0);
       final shape = inputTensor.shape;
       inputHeight = shape[1];
       inputWidth = shape[2];
@@ -112,28 +126,20 @@ class ObjectDetectionService {
 
       final input = _createInputTensor(resized);
 
-      final outputLocations = List.generate(
-        1,
-        (_) => List.generate(10, (_) => List.filled(4, 0.0)),
-      );
-      final outputClasses = List.generate(1, (_) => List.filled(10, 0.0));
-      final outputScores = List.generate(1, (_) => List.filled(10, 0.0));
-      final numDetections = List.filled(1, 0.0);
-
       final outputs = <int, Object>{
-        0: outputLocations,
-        1: outputClasses,
-        2: outputScores,
-        3: numDetections,
+        0: _outputLocations,
+        1: _outputClasses,
+        2: _outputScores,
+        3: _numDetections,
       };
 
       _interpreter!.runForMultipleInputs([input], outputs);
 
       return _postProcessDetections(
-        outputLocations,
-        outputClasses,
-        outputScores,
-        numDetections,
+        _outputLocations,
+        _outputClasses,
+        _outputScores,
+        _numDetections,
       );
     } catch (e) {
       debugPrint('[ObjectDetectionService] detect error: $e');
@@ -154,7 +160,8 @@ class ObjectDetectionService {
           final green = img.getGreen(pixel).toDouble();
           final blue = img.getBlue(pixel).toDouble();
 
-          if (inputType == 1) { // TfLiteType.uint8
+          if (inputType == 1) {
+            // TfLiteType.uint8
             return [red.toInt(), green.toInt(), blue.toInt()];
           }
           return [red / 255.0, green / 255.0, blue / 255.0];

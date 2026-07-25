@@ -54,6 +54,12 @@ class NavigationData {
   /// Whether this command should be emitted to voice output.
   final bool shouldSpeak;
 
+  /// Current overall path state.
+  final PathState pathState;
+
+  /// Current haptic alert intensity.
+  final HapticAlertLevel hapticAlertLevel;
+
   /// Total count of detected obstacles.
   int get obstacleCount => obstacles.length;
 

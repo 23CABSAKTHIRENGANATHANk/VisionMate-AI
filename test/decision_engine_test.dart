@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:visionmate_ai/features/navigation/decision_engine/decision_engine.dart';
 import 'package:visionmate_ai/features/navigation/decision_engine/navigation_command.dart';
-import 'package:visionmate_ai/features/navigation/decision_engine/navigation_command.dart';
 import 'package:visionmate_ai/features/navigation/decision_engine/navigation_rules.dart';
 import 'package:visionmate_ai/features/navigation/decision_engine/navigation_priority.dart';
 import 'package:visionmate_ai/features/spatial/models/navigation_object.dart';

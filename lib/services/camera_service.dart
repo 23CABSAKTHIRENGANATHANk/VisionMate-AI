@@ -163,8 +163,9 @@ class CameraService {
 
     final controller = CameraController(
       camera,
-      ResolutionPreset.high,
-      // Audio is not needed for visual navigation assistance.
+      ResolutionPreset.medium,
+      // Use a medium preview resolution to reduce CPU, memory, and battery
+      // pressure while keeping the camera preview smooth on Android.
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.yuv420,
     );

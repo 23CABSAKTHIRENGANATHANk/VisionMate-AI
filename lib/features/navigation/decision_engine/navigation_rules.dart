@@ -44,7 +44,6 @@ class NavigationRules {
   /// Returns the navigation command for the primary obstacle.
   NavigationCommand commandFor(NavigationObject obstacle) {
     final isLeft = obstacle.direction == ObjectDirection.left;
-    final isRight = obstacle.direction == ObjectDirection.right;
     final isCenter = obstacle.direction == ObjectDirection.center;
 
     switch (obstacle.risk) {

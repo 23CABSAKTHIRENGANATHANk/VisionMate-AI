@@ -23,7 +23,6 @@ import '../../core/constants/app_strings.dart';
 import '../../services/camera_service.dart';
 import '../../services/navigation_pipeline_processor.dart';
 import '../../services/object_detection_service.dart';
-import '../../services/obstacle_priority_analyzer.dart';
 import '../detection/detection_result.dart';
 import '../voice/voice_service.dart';
 import 'camera_permission_screen.dart';
@@ -59,12 +58,17 @@ class _CameraScreenState extends State<CameraScreen>
   final NavigationPipelineProcessor _pipelineProcessor =
       NavigationPipelineProcessor.instance;
 
+  static const Duration _frameProcessingInterval = Duration(milliseconds: 250);
+  static const Duration _sameSceneRetention = Duration(seconds: 2);
+
   _CameraPhase _phase = _CameraPhase.checkingPermission;
   bool _isSwitching = false;
   bool _isDetectionInitializing = true;
   String? _detectionError;
   List<DetectionResult> _detections = const <DetectionResult>[];
   String _lastVoiceGuidance = '';
+  DateTime _lastFrameProcessedAt = DateTime.fromMillisecondsSinceEpoch(0);
+  String _lastSceneHash = '';
 
   @override
   void initState() {
@@ -215,41 +219,81 @@ class _CameraScreenState extends State<CameraScreen>
 
   void _onCameraImageAvailable(CameraImage image) {
     if (!_detectionService.isLoaded) return;
-    if (_detectionService.isLoaded) {
-      final frame = DetectionFrame(
-        width: image.width,
-        height: image.height,
-        formatGroup: image.format.group.index,
-        planes: image.planes
-            .map(
-              (plane) => DetectionPlane(
-                bytes: Uint8List.fromList(plane.bytes),
-                bytesPerRow: plane.bytesPerRow,
-                bytesPerPixel: plane.bytesPerPixel ?? 1,
-              ),
-            )
-            .toList(),
-      );
-      _processCameraFrame(frame);
+    if (_detectionService.isProcessing) return;
+
+    final now = DateTime.now();
+    if (now.difference(_lastFrameProcessedAt) < _frameProcessingInterval) {
+      return;
     }
+
+    _lastFrameProcessedAt = now;
+
+    final frame = DetectionFrame(
+      width: image.width,
+      height: image.height,
+      formatGroup: image.format.group.index,
+      planes: image.planes
+          .map(
+            (plane) => DetectionPlane(
+              bytes: Uint8List.fromList(plane.bytes),
+              bytesPerRow: plane.bytesPerRow,
+              bytesPerPixel: plane.bytesPerPixel ?? 1,
+            ),
+          )
+          .toList(),
+    );
+
+    unawaited(_processCameraFrame(frame));
   }
 
   Future<void> _processCameraFrame(DetectionFrame frame) async {
     final detections = await _detectionService.detect(frame);
     if (!mounted) return;
 
+    final sceneHash = _generateSceneHash(detections);
+    final isSameScene =
+        sceneHash == _lastSceneHash &&
+        DateTime.now().difference(_lastFrameProcessedAt) < _sameSceneRetention;
+
+    if (isSameScene) {
+      return;
+    }
+
+    _lastSceneHash = sceneHash;
+
     if (!listEquals(detections, _detections)) {
       final navData = _pipelineProcessor.process(detections);
       if (navData.shouldSpeak &&
           navData.voiceGuidanceText != _lastVoiceGuidance) {
         _lastVoiceGuidance = navData.voiceGuidanceText;
-        VoiceService.instance.speak(navData.voiceGuidanceText);
+        unawaited(VoiceService.instance.speak(navData.voiceGuidanceText));
       }
 
       setState(() {
         _detections = detections;
       });
     }
+  }
+
+  String _generateSceneHash(List<DetectionResult> detections) {
+    if (detections.isEmpty) {
+      return 'empty';
+    }
+
+    final sortedDetections = List<DetectionResult>.from(detections)
+      ..sort((a, b) {
+        final labelCompare = a.label.compareTo(b.label);
+        if (labelCompare != 0) return labelCompare;
+        return a.rect.left.compareTo(b.rect.left);
+      });
+
+    return sortedDetections
+        .map(
+          (d) =>
+              '${d.label}:${d.confidence.toStringAsFixed(2)}:'
+              '${d.rect.left.toStringAsFixed(2)},${d.rect.top.toStringAsFixed(2)}',
+        )
+        .join('|');
   }
 
   // ── Build Methods ─────────────────────────────────────────────────────────

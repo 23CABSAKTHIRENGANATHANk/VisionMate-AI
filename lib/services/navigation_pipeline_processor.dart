@@ -58,8 +58,8 @@ class NavigationPipelineProcessor {
     final navigationObjects = _spatialProcessor.process(detections);
     final decision = _decisionEngine.decideFrom(navigationObjects);
 
-    final pathState;
-    final hapticLevel;
+    final PathState pathState;
+    final HapticAlertLevel hapticLevel;
 
     if (primary.priorityTier == ObstaclePriorityTier.critical) {
       pathState = PathState.blocked;
