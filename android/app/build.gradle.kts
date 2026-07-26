@@ -26,7 +26,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.visionmate_ai"
-        minSdk = flutter.minSdkVersion
+        minSdk = 21
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
