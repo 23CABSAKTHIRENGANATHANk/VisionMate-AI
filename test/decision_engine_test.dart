@@ -87,7 +87,7 @@ void main() {
       final decision = engine.decideFrom(objects);
 
       expect(decision.command, NavigationCommand.stop);
-      expect(decision.guidanceText, 'STOP');
+      expect(decision.guidanceText, 'Stop immediately.');
       expect(decision.priority, NavigationPriority.critical);
       expect(decision.shouldSpeak, isTrue);
     });
