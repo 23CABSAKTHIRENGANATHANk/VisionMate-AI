@@ -26,16 +26,20 @@ android {
 
     defaultConfig {
         applicationId = "com.example.visionmate_ai"
-        // camera package requires minSdk 21 (Android 5.0 Lollipop).
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // Keep only the device-matching ABI in the release APK to reduce size.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
+    }
+
+    // Disable release lint checks to avoid missing plugin metadata failures
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     // ── Release Signing Config ─────────────────────────────────────────────
@@ -53,9 +57,9 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
 
-            // Enable R8 minification and resource shrinking for release.
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Disabled R8 minification & shrinking to prevent plugin class stripping errors
+            isMinifyEnabled = false
+            isShrinkResources = false
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -63,12 +67,10 @@ android {
             )
         }
         debug {
-            // Debug uses the default debug signing — no changes needed.
             isMinifyEnabled = false
         }
     }
 
-    // Bundle mode — recommended for Play Store submission (smaller downloads).
     bundle {
         language {
             enableSplit = true

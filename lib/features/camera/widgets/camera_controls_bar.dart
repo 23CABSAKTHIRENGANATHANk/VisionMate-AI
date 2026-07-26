@@ -27,6 +27,8 @@ class CameraControlsBar extends StatelessWidget {
     required this.onFlashToggle,
     required this.onCapture,
     required this.onSwitchCamera,
+    this.onBlackoutToggle,
+    this.isBlackoutMode = false,
   });
 
   /// Whether the torch is currently active.
@@ -46,6 +48,12 @@ class CameraControlsBar extends StatelessWidget {
 
   /// Invoked when the user taps the switch-camera button.
   final VoidCallback onSwitchCamera;
+
+  /// Invoked when the user toggles battery saver blackout mode.
+  final VoidCallback? onBlackoutToggle;
+
+  /// Whether screen blackout mode is currently active.
+  final bool isBlackoutMode;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +88,20 @@ class CameraControlsBar extends StatelessWidget {
               iconColor: isTorchOn ? Colors.amber : Colors.white,
               onTap: onFlashToggle,
             ).animate(key: ValueKey(isTorchOn)).fadeIn(duration: 200.ms),
+
+            // ── Battery Saver Blackout Mode ───────────────────────────────
+            if (onBlackoutToggle != null)
+              _ControlButton(
+                key: const Key('camera_blackout_button'),
+                semanticLabel: isBlackoutMode
+                    ? 'Exit Battery Saver'
+                    : 'Battery Saver Blackout',
+                icon: isBlackoutMode
+                    ? Icons.visibility_rounded
+                    : Icons.nightlight_round,
+                iconColor: isBlackoutMode ? Colors.cyanAccent : Colors.white,
+                onTap: onBlackoutToggle!,
+              ),
 
             // ── Capture button (centre, larger) ──────────────────────────────
             _CaptureButton(

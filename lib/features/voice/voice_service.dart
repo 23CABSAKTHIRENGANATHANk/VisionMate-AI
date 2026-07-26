@@ -69,17 +69,38 @@ class VoiceService {
     }
   }
 
-  Future<void> speak(String text) async {
+  Future<void> speak(String text, {bool isUrgent = false}) async {
     final message = text.trim();
     if (message.isEmpty || _isDisposed || !_isEnabled) {
       return;
     }
 
+    if (isUrgent) {
+      // Immediate hazard priority interrupt: clear non-urgent queue and cut off ongoing speech.
+      _pendingMessages.clear();
+      try {
+        await _flutterTts.stop();
+      } catch (_) {}
+      _lastSpokenAt = null;
+      _pendingMessages.add(message);
+      _isProcessingQueue = false;
+      unawaited(_processQueue());
+      return;
+    }
+
     if (_shouldSuppress(message)) {
+      if (kDebugMode) {
+        debugPrint('[VoiceService] Suppressed duplicate message: "$message"');
+      }
       return;
     }
 
     _pendingMessages.add(message);
+    if (kDebugMode) {
+      debugPrint(
+        '[VoiceService] Message queued: "$message" (pending=${_pendingMessages.length})',
+      );
+    }
     if (!_isProcessingQueue) {
       unawaited(_processQueue());
     }

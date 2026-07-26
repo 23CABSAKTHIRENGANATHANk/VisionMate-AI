@@ -215,6 +215,7 @@ class CameraService {
 
     try {
       await _controller!.startImageStream(onAvailable);
+      if (kDebugMode) debugPrint('[CameraService] Image stream started.');
     } on CameraException catch (e) {
       debugPrint('[CameraService] startImageStream: ${e.description}');
     }
@@ -227,6 +228,7 @@ class CameraService {
 
     try {
       await _controller!.stopImageStream();
+      if (kDebugMode) debugPrint('[CameraService] Image stream stopped.');
     } on CameraException catch (e) {
       debugPrint('[CameraService] stopImageStream: ${e.description}');
     }

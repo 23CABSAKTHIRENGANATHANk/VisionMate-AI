@@ -268,7 +268,7 @@ class _FeatureCardGrid extends StatelessWidget {
       icon: Icons.navigation_rounded,
       title: AppConstants.cardStartNavigation,
       subtitle: AppConstants.cardStartNavigationSub,
-      route: AppConstants.routeNavigation,
+      route: AppConstants.routeCamera,
     ),
     _CardData(
       gradient: AppColors.cameraCardGradient,

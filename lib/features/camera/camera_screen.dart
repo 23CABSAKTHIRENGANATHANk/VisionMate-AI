@@ -18,14 +18,17 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../services/camera_service.dart';
 import '../../services/navigation_pipeline_processor.dart';
 import '../../services/obstacle_priority_analyzer.dart';
 import '../../services/object_detection_service.dart';
+import '../../models/navigation_data.dart';
 import '../detection/detection_result.dart';
 import '../voice/voice_service.dart';
+import '../../core/debug_settings.dart';
 import 'camera_permission_screen.dart';
 import 'widgets/camera_controls_bar.dart';
 import 'widgets/camera_top_bar.dart';
@@ -63,6 +66,7 @@ class _CameraScreenState extends State<CameraScreen>
   static const Duration _sameSceneRetention = Duration(seconds: 2);
 
   _CameraPhase _phase = _CameraPhase.checkingPermission;
+  bool _isBlackoutMode = false;
   bool _isSwitching = false;
   bool _isDetectionInitializing = true;
   bool _isStartingDetectionStream = false;
@@ -89,6 +93,14 @@ class _CameraScreenState extends State<CameraScreen>
   /// timestamp bug where _lastFrameProcessedAt was always the current frame.
   DateTime _lastSceneChangedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // Runtime metrics for debug overlay
+  int _framesThisSecond = 0;
+  DateTime _fpsWindowStart = DateTime.now();
+  int _lastFps = 0;
+
+  double _avgDetectLatencyMs = 0.0;
+  int _detectLatencyCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -99,6 +111,8 @@ class _CameraScreenState extends State<CameraScreen>
 
     // Load the detection model in the background so the camera can appear faster.
     unawaited(_loadDetectionModel());
+    // Ensure TTS is initialized early to avoid first-speech latency.
+    unawaited(VoiceService.instance.initialize());
   }
 
   @override
@@ -256,23 +270,66 @@ class _CameraScreenState extends State<CameraScreen>
 
     _isStartingDetectionStream = true;
     try {
+      if (kDebugMode) {
+        debugPrint('[CameraScreen] Starting detection stream...');
+      }
       await _cameraService.stopImageStream();
       await _cameraService.startImageStream(_onCameraImageAvailable);
+      if (kDebugMode) {
+        debugPrint('[CameraScreen] Detection stream started.');
+      }
     } finally {
       _isStartingDetectionStream = false;
     }
   }
 
   void _onCameraImageAvailable(CameraImage image) {
-    if (!_detectionService.isLoaded) return;
-    if (_detectionService.isProcessing) return;
+    if (!_detectionService.isLoaded) {
+      if (kDebugMode) {
+        debugPrint('[CameraScreen] Skipping frame: model not loaded');
+      }
+      return;
+    }
+    if (_detectionService.isProcessing) {
+      if (kDebugMode) {
+        debugPrint('[CameraScreen] Skipping frame: detection busy');
+      }
+      return;
+    }
 
     final now = DateTime.now();
+    // Update simple FPS counter (debug only).
+    if (now.difference(_fpsWindowStart) >= const Duration(seconds: 1)) {
+      _lastFps = _framesThisSecond;
+      _framesThisSecond = 0;
+      _fpsWindowStart = now;
+      if (kDebugMode && mounted) setState(() {});
+    }
+    _framesThisSecond++;
     if (now.difference(_lastFrameProcessedAt) < _frameProcessingInterval) {
+      if (kDebugMode) {
+        debugPrint('[CameraScreen] Skipping frame: rate limited');
+      }
       return;
     }
 
     _lastFrameProcessedAt = now;
+
+    // Auto low-light torch trigger: sample Y-plane average brightness
+    if (image.planes.isNotEmpty && image.planes[0].bytes.isNotEmpty) {
+      final yBytes = image.planes[0].bytes;
+      if (yBytes.length >= 100) {
+        final step = yBytes.length ~/ 100;
+        int sum = 0;
+        for (var i = 0; i < yBytes.length && (i ~/ step) < 100; i += step) {
+          sum += yBytes[i];
+        }
+        final avgBrightness = sum / 100;
+        if (avgBrightness < 35 && !_cameraService.isTorchOn) {
+          unawaited(_cameraService.toggleFlash());
+        }
+      }
+    }
 
     final frame = DetectionFrame(
       width: image.width,
@@ -293,7 +350,21 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Future<void> _processCameraFrame(DetectionFrame frame) async {
+    final detectStart = DateTime.now();
     final detections = await _detectionService.detect(frame);
+    final detectLatency = DateTime.now().difference(detectStart);
+    // Update running average latency (ms).
+    _detectLatencyCount++;
+    _avgDetectLatencyMs =
+        ((_avgDetectLatencyMs * (_detectLatencyCount - 1)) +
+            detectLatency.inMilliseconds) /
+        _detectLatencyCount;
+    if (kDebugMode) {
+      debugPrint(
+        '[CameraScreen] Detection latency: ${detectLatency.inMilliseconds}ms (avg=${_avgDetectLatencyMs.toStringAsFixed(1)}ms)',
+      );
+      if (mounted) setState(() {});
+    }
     if (!mounted) return;
 
     final sceneHash = _generateSceneHash(detections);
@@ -324,7 +395,28 @@ class _CameraScreenState extends State<CameraScreen>
       if (navData.shouldSpeak &&
           navData.voiceGuidanceText != _lastVoiceGuidance) {
         _lastVoiceGuidance = navData.voiceGuidanceText;
-        unawaited(VoiceService.instance.speak(navData.voiceGuidanceText));
+        final isUrgent = navData.pathState == PathState.blocked;
+        unawaited(
+          VoiceService.instance.speak(
+            navData.voiceGuidanceText,
+            isUrgent: isUrgent,
+          ),
+        );
+
+        // Directional & Hazard Haptic Feedback
+        switch (navData.hapticAlertLevel) {
+          case HapticAlertLevel.urgent:
+            HapticFeedback.heavyImpact();
+            break;
+          case HapticAlertLevel.warning:
+            HapticFeedback.mediumImpact();
+            break;
+          case HapticAlertLevel.subtle:
+            HapticFeedback.selectionClick();
+            break;
+          case HapticAlertLevel.none:
+            break;
+        }
       }
 
       setState(() {
@@ -521,6 +613,43 @@ class _CameraScreenState extends State<CameraScreen>
               ),
             ),
 
+          // ── Battery Saver Blackout Mode Overlay ─────────────────────────
+          if (_isBlackoutMode)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => setState(() => _isBlackoutMode = false),
+                child: Container(
+                  color: Colors.black,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(
+                        Icons.nightlight_round,
+                        color: Colors.cyanAccent,
+                        size: 64,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Battery Saver Mode Active',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'AI scanning & voice guidance remain active.\nTap anywhere to wake preview.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // ── Bottom Controls Bar ────────────────────────────────────────────
           Positioned(
             bottom: 0,
@@ -533,8 +662,62 @@ class _CameraScreenState extends State<CameraScreen>
               onFlashToggle: _handleToggleFlash,
               onCapture: _handleCapturePlaceholder,
               onSwitchCamera: _handleSwitchCamera,
+              onBlackoutToggle: () =>
+                  setState(() => _isBlackoutMode = !_isBlackoutMode),
+              isBlackoutMode: _isBlackoutMode,
             ),
           ),
+          // ── Debug Metrics Overlay (toggleable via Settings) ────────────
+          if (kDebugMode)
+            ValueListenableBuilder<bool>(
+              valueListenable: DebugSettings.showDebugOverlay,
+              builder: (context, show, _) {
+                if (!show) return const SizedBox.shrink();
+                return Positioned(
+                  top: 56,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color.fromRGBO(0, 0, 0, 0.6),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'FPS: $_lastFps',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Detect: ${_avgDetectLatencyMs.toStringAsFixed(1)} ms',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'DetCount: $_detectLatencyCount',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );

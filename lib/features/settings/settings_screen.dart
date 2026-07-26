@@ -15,6 +15,7 @@ import '../../core/constants/app_strings.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_tile.dart';
 import '../voice/voice_service.dart';
+import '../../core/debug_settings.dart';
 
 /// The settings configuration screen for VisionMate AI.
 ///
@@ -351,6 +352,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SectionHeader(title: AppStrings.aboutSection),
             _SettingsCard(
               children: [
+                SettingsTile(
+                  icon: Icons.developer_mode_rounded,
+                  iconColor: const Color(0xFF9C27B0),
+                  title: 'Developer',
+                  subtitle: 'Development-only toggles',
+                  onTap: null,
+                ),
+                const Divider(indent: 56, height: 1),
+                SettingsTile(
+                  icon: Icons.bug_report_rounded,
+                  iconColor: const Color(0xFFEF6C00),
+                  title: 'Show Debug Overlay',
+                  subtitle:
+                      'Display FPS and detection latency on the camera screen',
+                  trailing: ValueListenableBuilder<bool>(
+                    valueListenable: DebugSettings.showDebugOverlay,
+                    builder: (context, value, _) {
+                      return Switch(
+                        value: value,
+                        onChanged: (v) =>
+                            DebugSettings.showDebugOverlay.value = v,
+                      );
+                    },
+                  ),
+                ),
+                const Divider(indent: 56, height: 1),
                 SettingsTile(
                   icon: Icons.privacy_tip_rounded,
                   iconColor: const Color(0xFF1565C0),
