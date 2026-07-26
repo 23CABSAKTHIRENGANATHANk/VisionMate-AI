@@ -71,13 +71,16 @@ class _CameraScreenState extends State<CameraScreen>
       NavigationPipelineProcessor.instance;
 
   static const Duration _frameProcessingInterval = Duration(milliseconds: 30);
-  static const Duration _sameSceneRetention = Duration(seconds: 2);
 
   _CameraPhase _phase = _CameraPhase.checkingPermission;
   bool _isBlackoutMode = false;
   bool _isSwitching = false;
   bool _isDetectionInitializing = true;
+  bool _isStartingDetectionStream = false;
   String? _detectionError;
+
+  double _avgDetectLatencyMs = 0.0;
+  int _detectLatencyCount = 0;
 
   List<DetectionResult> _detections = const <DetectionResult>[];
 

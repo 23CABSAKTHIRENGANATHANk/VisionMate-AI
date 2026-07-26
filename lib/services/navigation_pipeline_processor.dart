@@ -10,7 +10,7 @@ import 'obstacle_priority_analyzer.dart';
 import 'path_analyzer.dart';
 import 'position_analyzer.dart';
 
-import 'scene_understanding_engine.dart';
+
 
 /// Central coordinator that executes the VisionMate AI processing pipeline:
 ///
