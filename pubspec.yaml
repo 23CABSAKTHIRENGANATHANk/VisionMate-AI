@@ -49,6 +49,9 @@ dependencies:
   # Flutter TTS — accessible speech synthesis for voice guidance.
   flutter_tts: ^4.0.0
 
+  # Google ML Kit Object Detection & Tracking
+  google_mlkit_object_detection: ^0.16.0
+
   # TensorFlow Lite runtime for on-device AI inference.
   tflite_flutter: ^0.12.1
 

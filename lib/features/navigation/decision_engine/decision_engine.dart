@@ -38,7 +38,7 @@ class NavigationDecision {
 class DecisionEngine {
   DecisionEngine({
     NavigationRules? rules,
-    this._repeatCooldown = const Duration(seconds: 3),
+    this._repeatCooldown = const Duration(seconds: 6),
     DateTime Function()? timeProvider,
   }) : _rules = rules ?? const NavigationRules(),
        _timeProvider = timeProvider ?? DateTime.now;

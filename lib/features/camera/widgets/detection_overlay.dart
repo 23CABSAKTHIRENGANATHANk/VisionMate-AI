@@ -1,123 +1,66 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
 
+import '../../../models/tracked_object.dart';
 import '../../../services/obstacle_priority_analyzer.dart';
+import '../../detection/bounding_box_painter.dart';
 import '../../detection/detection_result.dart';
 
-/// Paints detected object bounding boxes, priority color coding, distance
-/// estimations, and labels on top of the camera view.
-///
-/// Accepts pre-computed [obstacles] from the parent state so that the full
-/// 7-stage navigation pipeline is NOT run on every widget rebuild (which
-/// previously caused main-thread jank on every orientation change, scroll,
-/// or setState).
+/// Overlay widget rendering smooth, anti-flicker object tracking bounding boxes,
+/// label names, confidence percentages, and dynamic pinhole distance estimations.
 class DetectionOverlay extends StatelessWidget {
   const DetectionOverlay({
     super.key,
-    required this.obstacles,
-    // Legacy support: raw detections accepted but ignored (obstacles drive rendering)
+    this.trackedObjects = const <TrackedObject>[],
+    this.mlKitObjects = const <DetectedObject>[],
+    this.imageSize = Size.zero,
+    this.rotation = InputImageRotation.rotation0deg,
+    this.obstacles = const <ProcessedObstacle>[],
     this.detections = const <DetectionResult>[],
   });
 
-  /// Pre-processed obstacles sorted by priority (highest first).
-  /// Computed once per AI frame in [CameraScreen._processCameraFrame].
+  /// Smoothly tracked objects from VisionNavigationEngine.
+  final List<TrackedObject> trackedObjects;
+
+  /// Google ML Kit detected objects.
+  final List<DetectedObject> mlKitObjects;
+  final Size imageSize;
+  final InputImageRotation rotation;
+
+  /// Pre-processed obstacles.
   final List<ProcessedObstacle> obstacles;
 
-  /// Raw detections — retained for API compatibility but not used in build.
+  /// Raw detections.
   final List<DetectionResult> detections;
 
   @override
   Widget build(BuildContext context) {
+    if (trackedObjects.isNotEmpty || detections.isNotEmpty || mlKitObjects.isNotEmpty) {
+      return IgnorePointer(
+        child: CustomPaint(
+          painter: BoundingBoxPainter(
+            trackedObjects: trackedObjects,
+            detections: detections,
+            mlKitObjects: mlKitObjects,
+            imageSize: imageSize,
+            rotation: rotation,
+          ),
+          size: Size.infinite,
+        ),
+      );
+    }
+
     if (obstacles.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return IgnorePointer(
       child: CustomPaint(
-        painter: _DetectionPainter(obstacles: obstacles),
+        painter: BoundingBoxPainter(
+          detections: detections,
+        ),
         size: Size.infinite,
       ),
     );
-  }
-}
-
-class _DetectionPainter extends CustomPainter {
-  _DetectionPainter({required this.obstacles});
-
-  final List<ProcessedObstacle> obstacles;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (final obstacle in obstacles) {
-      final detection = obstacle.detection;
-      final color = obstacle.tierColor;
-
-      final boxPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth =
-            obstacle.priorityTier == ObstaclePriorityTier.critical ? 4.0 : 3.0
-        ..color = color;
-
-      final fillPaint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = const Color.fromRGBO(0, 0, 0, 0.70);
-
-      final rect = Rect.fromLTRB(
-        detection.rect.left * size.width,
-        detection.rect.top * size.height,
-        detection.rect.right * size.width,
-        detection.rect.bottom * size.height,
-      ).deflate(2);
-
-      // Draw bounding box rect
-      canvas.drawRect(rect, boxPaint);
-
-      // Label text with distance & confidence
-      final textSpan = TextSpan(
-        text:
-            '${detection.label} • ${obstacle.distance.formattedDistance} (${(detection.confidence * 100).toStringAsFixed(0)}%)',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      );
-
-      final tp = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-      )..layout(maxWidth: max(100.0, size.width - 32));
-
-      final labelRect = Rect.fromLTWH(
-        rect.left,
-        max(0.0, rect.top - tp.height - 8),
-        tp.width + 14,
-        tp.height + 8,
-      );
-
-      // Draw label background pill with priority border indicator
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(labelRect, const Radius.circular(6)),
-        fillPaint,
-      );
-
-      final borderPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = color;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(labelRect, const Radius.circular(6)),
-        borderPaint,
-      );
-
-      tp.paint(canvas, Offset(labelRect.left + 7, labelRect.top + 4));
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DetectionPainter oldDelegate) {
-    return oldDelegate.obstacles != obstacles;
   }
 }

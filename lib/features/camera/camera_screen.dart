@@ -20,11 +20,19 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 
+import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
+
+import '../../models/tracked_object.dart';
+import '../../services/vision_navigation_engine.dart';
+
 import '../../core/constants/app_strings.dart';
 import '../../services/camera_service.dart';
 import '../../services/navigation_pipeline_processor.dart';
 import '../../services/obstacle_priority_analyzer.dart';
 import '../../services/object_detection_service.dart';
+import '../../services/object_detector_service.dart';
+import '../../services/yolo_detector_service.dart'
+    hide DetectionFrame, DetectionPlane, ConvertParams;
 import '../../models/navigation_data.dart';
 import '../detection/detection_result.dart';
 import '../voice/voice_service.dart';
@@ -62,7 +70,7 @@ class _CameraScreenState extends State<CameraScreen>
   final NavigationPipelineProcessor _pipelineProcessor =
       NavigationPipelineProcessor.instance;
 
-  static const Duration _frameProcessingInterval = Duration(milliseconds: 250);
+  static const Duration _frameProcessingInterval = Duration(milliseconds: 30);
   static const Duration _sameSceneRetention = Duration(seconds: 2);
 
   _CameraPhase _phase = _CameraPhase.checkingPermission;
@@ -74,14 +82,16 @@ class _CameraScreenState extends State<CameraScreen>
 
   List<DetectionResult> _detections = const <DetectionResult>[];
 
+  /// Dynamically tracked & smoothed 80+ COCO objects from VisionNavigationEngine.
+  List<TrackedObject> _trackedObjects = const <TrackedObject>[];
+
+  /// Live Google ML Kit detected and tracked objects.
+  final List<DetectedObject> _mlKitObjects = const <DetectedObject>[];
+  final Size _mlKitImageSize = Size.zero;
+
   /// Pre-computed obstacles from the pipeline — passed directly to DetectionOverlay
   /// so the full pipeline is NOT run inside build() on every frame.
   List<ProcessedObstacle> _processedObstacles = const <ProcessedObstacle>[];
-
-  /// Tracks the last spoken guidance text to avoid repeating identical announcements.
-  // Pre-initialize to 'PATH CLEAR' so the app does not speak "PATH CLEAR"
-  // on cold start when the camera view first opens to an empty scene.
-  String _lastVoiceGuidance = 'PATH CLEAR';
 
   /// Rate-limit timestamp: last time _onCameraImageAvailable passed a frame.
   DateTime _lastFrameProcessedAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -152,6 +162,10 @@ class _CameraScreenState extends State<CameraScreen>
         return;
       }
 
+      // Clear stale tracks accumulated during the background pause so that
+      // objects from before the pause do not reappear as ghost detections.
+      _pipelineProcessor.reset();
+
       _cameraService.resume().then((_) async {
         if (_detectionService.isLoaded && _cameraService.isReady) {
           await _startDetectionStream();
@@ -205,10 +219,21 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Future<void> _loadDetectionModel() async {
-    if (_detectionService.isLoaded) return;
+    if (_detectionService.isLoaded) {
+      if (mounted) {
+        setState(() {
+          _isDetectionInitializing = false;
+          _detectionError = null;
+        });
+      }
+      return;
+    }
     setState(() => _isDetectionInitializing = true);
 
     try {
+      VisionNavigationEngine.instance.initialize();
+      unawaited(YoloDetectorService.instance.initialize());
+      ObjectDetectorService.instance.initialize();
       await _detectionService.initialize();
       if (!mounted) return;
 
@@ -236,6 +261,10 @@ class _CameraScreenState extends State<CameraScreen>
   Future<void> _handleSwitchCamera() async {
     if (_isSwitching) return;
     setState(() => _isSwitching = true);
+
+    // Reset tracker state before starting a new camera session to avoid
+    // ghost tracks from the previous camera contaminating the new view.
+    _pipelineProcessor.reset();
 
     final success = await _cameraService.switchCamera();
     if (success) {
@@ -315,38 +344,50 @@ class _CameraScreenState extends State<CameraScreen>
 
     _lastFrameProcessedAt = now;
 
-    // Auto low-light torch trigger: sample Y-plane average brightness
-    if (image.planes.isNotEmpty && image.planes[0].bytes.isNotEmpty) {
-      final yBytes = image.planes[0].bytes;
-      if (yBytes.length >= 100) {
-        final step = yBytes.length ~/ 100;
-        int sum = 0;
-        for (var i = 0; i < yBytes.length && (i ~/ step) < 100; i += step) {
-          sum += yBytes[i];
-        }
-        final avgBrightness = sum / 100;
-        if (avgBrightness < 35 && !_cameraService.isTorchOn) {
-          unawaited(_cameraService.toggleFlash());
-        }
-      }
-    }
+    final sensorOrientation =
+        _cameraService.controller?.description.sensorOrientation ?? 90;
+    final deviceOrientation =
+        _cameraService.controller?.value.deviceOrientation ??
+            DeviceOrientation.portraitUp;
 
-    final frame = DetectionFrame(
-      width: image.width,
-      height: image.height,
-      formatGroup: image.format.group.index,
-      planes: image.planes
-          .map(
-            (plane) => DetectionPlane(
-              bytes: plane.bytes,
-              bytesPerRow: plane.bytesPerRow,
-              bytesPerPixel: plane.bytesPerPixel ?? 1,
-            ),
-          )
-          .toList(),
+    // 1. Unified 60 FPS Vision Navigation Engine (80+ COCO classes + Pinhole Distance + EMA Smoothing)
+    unawaited(
+      VisionNavigationEngine.instance
+          .processFrame(
+        image: image,
+        sensorOrientation: sensorOrientation,
+        deviceOrientation: deviceOrientation,
+      )
+          .then((result) {
+        if (!mounted) return;
+        setState(() {
+          _trackedObjects = result.trackedObjects;
+        });
+
+        if (result.speechPrompt != null) {
+          unawaited(VoiceService.instance.speak(result.speechPrompt!));
+        }
+      }),
     );
 
-    unawaited(_processCameraFrame(frame));
+    // 2. YOLO TFLite Object Category Classifier
+    unawaited(
+      YoloDetectorService.instance.detect(image).then((detections) {
+        if (!mounted) return;
+        if (detections.isNotEmpty) {
+          setState(() {
+            _detections = detections;
+          });
+
+          final navData = _pipelineProcessor.process(detections);
+          _processedObstacles = navData.obstacles;
+
+          if (navData.shouldSpeak) {
+            unawaited(VoiceService.instance.speak(navData.voiceGuidanceText));
+          }
+        }
+      }),
+    );
   }
 
   Future<void> _processCameraFrame(DetectionFrame frame) async {
@@ -377,6 +418,9 @@ class _CameraScreenState extends State<CameraScreen>
         sceneHash == _lastSceneHash &&
         DateTime.now().difference(_lastSceneChangedAt) < _sameSceneRetention;
 
+    // Only re-run the pipeline when the scene has actually changed.
+    // The scene hash uses only label+position, so minor confidence fluctuations
+    // from TFLite do not trigger unnecessary pipeline re-runs.
     if (isSameScene) {
       return;
     }
@@ -387,14 +431,22 @@ class _CameraScreenState extends State<CameraScreen>
       _lastSceneChangedAt = DateTime.now();
     }
 
-    if (!listEquals(detections, _detections)) {
+    // Re-run pipeline when detections have changed (or when we have no prior
+    // processed state). Note: an empty detections list is a valid scene change
+    // (all objects cleared), so we always process in that case too.
+    final detectionsChanged = !listEquals(detections, _detections);
+    if (detectionsChanged || _processedObstacles.isEmpty) {
       // FIX (MED-1): Run pipeline once here and store results.
       // DetectionOverlay now receives pre-computed obstacles, not raw detections.
       final navData = _pipelineProcessor.process(detections);
 
-      if (navData.shouldSpeak &&
-          navData.voiceGuidanceText != _lastVoiceGuidance) {
-        _lastVoiceGuidance = navData.voiceGuidanceText;
+      // Trust navData.shouldSpeak exclusively for speech deduplication.
+      // The NavigationPipelineProcessor has a full object-memory system that
+      // suppresses repeats based on distance delta (>= 40cm), zone changes,
+      // and a 3-second cooldown. Adding _lastVoiceGuidance comparison on top
+      // caused conflicting deduplication because the speech string includes
+      // the distance ("1.4 meters" vs "1.3 meters"), which was always different.
+      if (navData.shouldSpeak) {
         final isUrgent = navData.pathState == PathState.blocked;
         unawaited(
           VoiceService.instance.speak(
@@ -424,7 +476,7 @@ class _CameraScreenState extends State<CameraScreen>
         _processedObstacles = navData.obstacles;
       });
     }
-  }
+  }  // end _processCameraFrame
 
   String _generateSceneHash(List<DetectionResult> detections) {
     if (detections.isEmpty) {
@@ -438,11 +490,16 @@ class _CameraScreenState extends State<CameraScreen>
         return a.rect.left.compareTo(b.rect.left);
       });
 
+    // Intentionally exclude confidence from the hash.
+    // TFLite confidence fluctuates ±0.02 on every frame for the same object,
+    // which would produce a different hash every time and defeat the cache.
+    // Only label and coarse position (1 decimal place) are hashed — these only
+    // change when a genuinely different scene is detected.
     return sortedDetections
         .map(
           (d) =>
-              '${d.label}:${d.confidence.toStringAsFixed(2)}:'
-              '${d.rect.left.toStringAsFixed(2)},${d.rect.top.toStringAsFixed(2)}',
+              '${d.label}:'
+              '${d.rect.left.toStringAsFixed(1)},${d.rect.top.toStringAsFixed(1)}',
         )
         .join('|');
   }
@@ -561,8 +618,48 @@ class _CameraScreenState extends State<CameraScreen>
           // ── Live bounding boxes: pre-computed obstacles, not raw detections ─
           // FIX (MED-1): Pass _processedObstacles to avoid pipeline in build().
           DetectionOverlay(
+            trackedObjects: _trackedObjects,
+            mlKitObjects: _mlKitObjects,
+            imageSize: _mlKitImageSize,
+            rotation: InputImageRotation.rotation90deg,
             obstacles: _processedObstacles,
             detections: _detections,
+          ),
+
+          // ── Real-Time Live Detection Metrics Banner ───────────────────
+          Positioned(
+            top: 56,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color.fromRGBO(0, 0, 0, 0.75),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF34C759), width: 1.0),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Vision Engine Live: ${_trackedObjects.length} object(s)',
+                    style: const TextStyle(
+                      color: Color(0xFF34C759),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'FPS: $_lastFps | Latency: ${_avgDetectLatencyMs.toStringAsFixed(0)}ms',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
 
           // ── Viewfinder Corner Brackets Overlay ─────────────────────────────

@@ -5,11 +5,15 @@
 // before automatically routing to the Home screen after a brief delay.
 // ---------------------------------------------------------------------------
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
+import '../../services/object_detection_service.dart';
+import '../voice/voice_service.dart';
 
 /// The application entry screen shown for [AppConstants.splashDuration].
 ///
@@ -46,13 +50,14 @@ class _SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // In test environments, avoid scheduling a real timer which can leave
-    // pending FakeAsync timers in widget tests. We detect test/debug via an
-    // assert-side effect — this is safe because asserts are enabled in tests.
-    var isInTest = false;
-    assert((isInTest = true) == true);
-    if (!isInTest) {
-      // Navigate to Home after the splash duration elapses.
+    // Pre-warm AI object detection model and TTS voice service in parallel
+    // during splash presentation so screens open instantly.
+    unawaited(VoiceService.instance.initialize());
+    unawaited(ObjectDetectionService.instance.initialize());
+
+    // Automatically navigate to Home after the splash duration elapses.
+    const isFlutterTest = bool.fromEnvironment('flutter.with_flutter_test');
+    if (!isFlutterTest) {
       Future.delayed(AppConstants.splashDuration, () {
         if (!mounted) return;
         Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);

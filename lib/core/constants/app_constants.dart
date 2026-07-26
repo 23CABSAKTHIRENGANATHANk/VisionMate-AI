@@ -52,7 +52,7 @@ class AppConstants {
   // ── Timing ────────────────────────────────────────────────────────────────
 
   /// Duration the Splash screen is visible before auto-navigating to Home.
-  static const Duration splashDuration = Duration(milliseconds: 2500);
+  static const Duration splashDuration = Duration(milliseconds: 1200);
 
   /// Duration of page transition animations.
   static const Duration pageTransitionDuration = Duration(milliseconds: 350);

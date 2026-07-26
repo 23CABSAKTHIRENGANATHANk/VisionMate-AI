@@ -60,29 +60,30 @@ class ProcessedObstacle {
 class ObstaclePriorityAnalyzer {
   const ObstaclePriorityAnalyzer();
 
-  /// Critical hazard classes that present immediate physical navigation danger.
-  static const Set<String> _highDangerClasses = {
-    'stairs',
-    'step',
-    'car',
-    'truck',
-    'bus',
-    'hole',
-    'door',
-    'traffic light',
-  };
-
-  /// Moderate hazard classes that are physical obstacles.
-  static const Set<String> _moderateDangerClasses = {
-    'person',
-    'dog',
-    'bicycle',
-    'motorcycle',
-    'chair',
-    'couch',
-    'sofa',
-    'table',
-    'dining table',
+  /// Class hazard ranking weights aligned with visually impaired navigation safety priorities:
+  /// Person (30) > Vehicle (28) > Stairs (26) > Pole (24) > Wall (22) > Door (20) > Chair (16) > Table (14) > Bag (10).
+  static const Map<String, double> _classHazardWeights = {
+    'person': 30.0,
+    'car': 28.0,
+    'truck': 28.0,
+    'bus': 28.0,
+    'vehicle': 28.0,
+    'stairs': 26.0,
+    'step': 26.0,
+    'pole': 24.0,
+    'traffic light': 24.0,
+    'wall': 22.0,
+    'doorway': 20.0,
+    'door': 20.0,
+    'chair': 16.0,
+    'couch': 16.0,
+    'sofa': 16.0,
+    'table': 14.0,
+    'desk': 14.0,
+    'bag': 10.0,
+    'backpack': 10.0,
+    'handbag': 10.0,
+    'suitcase': 10.0,
   };
 
   /// Evaluates raw detection with spatial position & distance to produce a prioritized obstacle.
@@ -109,22 +110,17 @@ class ObstaclePriorityAnalyzer {
         break;
     }
 
-    // 2. Direct Path Collision Score (up to 30 points)
+    // 2. Direct Path Collision Score (up to 25 points)
     if (position.horizontalZone == HorizontalZone.center) {
-      score += 30.0;
+      score += 25.0;
     } else {
       score += 10.0;
     }
 
-    // 3. Object Hazard Class Score (up to 20 points)
+    // 3. Class Hazard Score (up to 25 points)
     final labelLower = detection.label.toLowerCase().trim();
-    if (_highDangerClasses.contains(labelLower)) {
-      score += 20.0;
-    } else if (_moderateDangerClasses.contains(labelLower)) {
-      score += 15.0;
-    } else {
-      score += 5.0;
-    }
+    final classWeight = _classHazardWeights[labelLower] ?? 6.0;
+    score += classWeight;
 
     // Scale by model confidence score
     score *= detection.confidence.clamp(0.5, 1.0);

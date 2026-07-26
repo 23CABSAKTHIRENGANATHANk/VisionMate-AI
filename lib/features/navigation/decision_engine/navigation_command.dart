@@ -16,26 +16,27 @@ enum NavigationCommand {
 
 extension NavigationCommandX on NavigationCommand {
   /// Human-readable label suitable for speech output.
+  /// Written as calm, natural accessibility language — not uppercase commands.
   String get label {
     switch (this) {
       case NavigationCommand.stop:
-        return 'STOP';
+        return 'Stop immediately.';
       case NavigationCommand.moveLeft:
-        return 'MOVE LEFT';
+        return 'Move slightly to the left.';
       case NavigationCommand.moveRight:
-        return 'MOVE RIGHT';
+        return 'Move slightly to the right.';
       case NavigationCommand.goStraight:
-        return 'GO STRAIGHT';
+        return 'Continue straight ahead.';
       case NavigationCommand.slowDown:
-        return 'SLOW DOWN';
+        return 'Slow down.';
       case NavigationCommand.pathClear:
-        return 'PATH CLEAR';
+        return 'Path is clear.';
       case NavigationCommand.turnLeft:
-        return 'TURN LEFT';
+        return 'Turn left.';
       case NavigationCommand.turnRight:
-        return 'TURN RIGHT';
+        return 'Turn right.';
       case NavigationCommand.wait:
-        return 'WAIT';
+        return 'Please wait.';
     }
   }
 }

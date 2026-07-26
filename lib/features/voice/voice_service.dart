@@ -26,7 +26,7 @@ class VoiceService {
   String? _lastSpokenMessage;
   DateTime? _lastSpokenAt;
 
-  static const Duration _duplicateWindow = Duration(seconds: 2);
+  static const Duration _duplicateWindow = Duration(seconds: 5);
 
   bool get isInitialized => _isInitialized;
   bool get isEnabled => _isEnabled;
