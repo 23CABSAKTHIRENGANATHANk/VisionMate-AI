@@ -25,7 +25,6 @@ class NavigationPipelineProcessor {
     DecisionEngine? decisionEngine,
     ObjectTracker? tracker,
     PathAnalyzer? pathAnalyzer,
-    SceneUnderstandingEngine? sceneEngine,
   })  : _positionAnalyzer = positionAnalyzer ?? const PositionAnalyzer(),
         _distanceEstimator = distanceEstimator ?? const DistanceEstimator(),
         _priorityAnalyzer =
@@ -33,8 +32,7 @@ class NavigationPipelineProcessor {
         _spatialProcessor = spatialProcessor ?? const SpatialProcessor(),
         _decisionEngine = decisionEngine ?? DecisionEngine(),
         _tracker = tracker ?? ObjectTracker(),
-        _pathAnalyzer = pathAnalyzer ?? const PathAnalyzer(),
-        _sceneEngine = sceneEngine ?? const SceneUnderstandingEngine();
+        _pathAnalyzer = pathAnalyzer ?? const PathAnalyzer();
 
   static final NavigationPipelineProcessor instance =
       NavigationPipelineProcessor();
@@ -46,7 +44,6 @@ class NavigationPipelineProcessor {
   final DecisionEngine _decisionEngine;
   final ObjectTracker _tracker;
   final PathAnalyzer _pathAnalyzer;
-  final SceneUnderstandingEngine _sceneEngine;
 
   bool _wasPathBlocked = false;
 

@@ -77,7 +77,6 @@ class _CameraScreenState extends State<CameraScreen>
   bool _isBlackoutMode = false;
   bool _isSwitching = false;
   bool _isDetectionInitializing = true;
-  bool _isStartingDetectionStream = false;
   String? _detectionError;
 
   List<DetectionResult> _detections = const <DetectionResult>[];
@@ -96,20 +95,10 @@ class _CameraScreenState extends State<CameraScreen>
   /// Rate-limit timestamp: last time _onCameraImageAvailable passed a frame.
   DateTime _lastFrameProcessedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Hash of the last processed scene — used to skip redundant AI calls.
-  String _lastSceneHash = '';
-
-  /// Tracks the last time the scene CHANGED — fixes the scene-retention
-  /// timestamp bug where _lastFrameProcessedAt was always the current frame.
-  DateTime _lastSceneChangedAt = DateTime.fromMillisecondsSinceEpoch(0);
-
   // Runtime metrics for debug overlay
   int _framesThisSecond = 0;
   DateTime _fpsWindowStart = DateTime.now();
   int _lastFps = 0;
-
-  double _avgDetectLatencyMs = 0.0;
-  int _detectLatencyCount = 0;
 
   @override
   void initState() {
@@ -390,119 +379,7 @@ class _CameraScreenState extends State<CameraScreen>
     );
   }
 
-  Future<void> _processCameraFrame(DetectionFrame frame) async {
-    final detectStart = DateTime.now();
-    final detections = await _detectionService.detect(frame);
-    final detectLatency = DateTime.now().difference(detectStart);
-    // Update running average latency (ms).
-    _detectLatencyCount++;
-    _avgDetectLatencyMs =
-        ((_avgDetectLatencyMs * (_detectLatencyCount - 1)) +
-            detectLatency.inMilliseconds) /
-        _detectLatencyCount;
-    if (kDebugMode) {
-      debugPrint(
-        '[CameraScreen] Detection latency: ${detectLatency.inMilliseconds}ms (avg=${_avgDetectLatencyMs.toStringAsFixed(1)}ms)',
-      );
-      if (mounted) setState(() {});
-    }
-    if (!mounted) return;
 
-    final sceneHash = _generateSceneHash(detections);
-
-    // FIX (MED-2): Use _lastSceneChangedAt instead of _lastFrameProcessedAt.
-    // _lastFrameProcessedAt is updated at frame ARRIVAL (not scene change),
-    // so the old check always had a near-zero diff. This field only updates
-    // when the scene actually changes.
-    final isSameScene =
-        sceneHash == _lastSceneHash &&
-        DateTime.now().difference(_lastSceneChangedAt) < _sameSceneRetention;
-
-    // Only re-run the pipeline when the scene has actually changed.
-    // The scene hash uses only label+position, so minor confidence fluctuations
-    // from TFLite do not trigger unnecessary pipeline re-runs.
-    if (isSameScene) {
-      return;
-    }
-
-    // Update scene tracking when content changes.
-    if (sceneHash != _lastSceneHash) {
-      _lastSceneHash = sceneHash;
-      _lastSceneChangedAt = DateTime.now();
-    }
-
-    // Re-run pipeline when detections have changed (or when we have no prior
-    // processed state). Note: an empty detections list is a valid scene change
-    // (all objects cleared), so we always process in that case too.
-    final detectionsChanged = !listEquals(detections, _detections);
-    if (detectionsChanged || _processedObstacles.isEmpty) {
-      // FIX (MED-1): Run pipeline once here and store results.
-      // DetectionOverlay now receives pre-computed obstacles, not raw detections.
-      final navData = _pipelineProcessor.process(detections);
-
-      // Trust navData.shouldSpeak exclusively for speech deduplication.
-      // The NavigationPipelineProcessor has a full object-memory system that
-      // suppresses repeats based on distance delta (>= 40cm), zone changes,
-      // and a 3-second cooldown. Adding _lastVoiceGuidance comparison on top
-      // caused conflicting deduplication because the speech string includes
-      // the distance ("1.4 meters" vs "1.3 meters"), which was always different.
-      if (navData.shouldSpeak) {
-        final isUrgent = navData.pathState == PathState.blocked;
-        unawaited(
-          VoiceService.instance.speak(
-            navData.voiceGuidanceText,
-            isUrgent: isUrgent,
-          ),
-        );
-
-        // Directional & Hazard Haptic Feedback
-        switch (navData.hapticAlertLevel) {
-          case HapticAlertLevel.urgent:
-            HapticFeedback.heavyImpact();
-            break;
-          case HapticAlertLevel.warning:
-            HapticFeedback.mediumImpact();
-            break;
-          case HapticAlertLevel.subtle:
-            HapticFeedback.selectionClick();
-            break;
-          case HapticAlertLevel.none:
-            break;
-        }
-      }
-
-      setState(() {
-        _detections = detections;
-        _processedObstacles = navData.obstacles;
-      });
-    }
-  }  // end _processCameraFrame
-
-  String _generateSceneHash(List<DetectionResult> detections) {
-    if (detections.isEmpty) {
-      return 'empty';
-    }
-
-    final sortedDetections = List<DetectionResult>.from(detections)
-      ..sort((a, b) {
-        final labelCompare = a.label.compareTo(b.label);
-        if (labelCompare != 0) return labelCompare;
-        return a.rect.left.compareTo(b.rect.left);
-      });
-
-    // Intentionally exclude confidence from the hash.
-    // TFLite confidence fluctuates ±0.02 on every frame for the same object,
-    // which would produce a different hash every time and defeat the cache.
-    // Only label and coarse position (1 decimal place) are hashed — these only
-    // change when a genuinely different scene is detected.
-    return sortedDetections
-        .map(
-          (d) =>
-              '${d.label}:'
-              '${d.rect.left.toStringAsFixed(1)},${d.rect.top.toStringAsFixed(1)}',
-        )
-        .join('|');
-  }
 
   // ── Build Methods ─────────────────────────────────────────────────────────
 
