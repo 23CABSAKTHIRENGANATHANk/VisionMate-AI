@@ -33,7 +33,6 @@ import '../../services/object_detection_service.dart';
 import '../../services/object_detector_service.dart';
 import '../../services/yolo_detector_service.dart'
     hide DetectionFrame, DetectionPlane, ConvertParams;
-import '../../models/navigation_data.dart';
 import '../detection/detection_result.dart';
 import '../voice/voice_service.dart';
 import '../../core/debug_settings.dart';
@@ -79,8 +78,8 @@ class _CameraScreenState extends State<CameraScreen>
   bool _isStartingDetectionStream = false;
   String? _detectionError;
 
-  double _avgDetectLatencyMs = 0.0;
-  int _detectLatencyCount = 0;
+  final double _avgDetectLatencyMs = 0.0;
+  final int _detectLatencyCount = 0;
 
   List<DetectionResult> _detections = const <DetectionResult>[];
 
